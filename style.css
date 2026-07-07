@@ -1,0 +1,1247 @@
+/* ============================================================
+   【理不尽】Web広告運用ダービー
+   ============================================================ */
+
+:root {
+  --bg: #14120e;
+  --bg-panel: #211f1b;
+  --bg-panel-2: #2a2722;
+  --line: #3d382f;
+  --gold: #f1c453;
+  --green: #36b37e;
+  --turf: #1e3d2a;
+  --turf-2: #234a32;
+  --text: #f4efe4;
+  --text-dim: #b3ab99;
+  --red: #ff5c5c;
+  --font-jp: "DotGothic16", "MS Gothic", monospace;
+  --font-pixel: "Press Start 2P", "DotGothic16", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: var(--font-jp);
+  font-size: 17px;
+  line-height: 1.55;
+  background:
+    radial-gradient(1200px 500px at 50% -100px, rgba(241, 196, 83, 0.08), transparent),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(0, 0, 0, 0.12) 3px 4px),
+    var(--bg);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---------- 画面切り替え ---------- */
+
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+/* ---------- 共通パーツ ---------- */
+
+.board-label {
+  margin: 0 0 6px;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--gold);
+}
+
+.big-button {
+  display: inline-block;
+  padding: 16px 38px;
+  font-family: var(--font-jp);
+  font-size: 22px;
+  color: #1b1912;
+  background: var(--gold);
+  border: 3px solid #fff2cf;
+  border-radius: 4px;
+  box-shadow: 0 6px 0 #8a6b1e;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.big-button:hover {
+  transform: translateY(2px);
+  box-shadow: 0 4px 0 #8a6b1e;
+}
+
+.big-button:active {
+  transform: translateY(6px);
+  box-shadow: 0 0 0 #8a6b1e;
+}
+
+.sub-button {
+  display: inline-block;
+  padding: 12px 22px;
+  font-family: var(--font-jp);
+  font-size: 17px;
+  color: var(--text);
+  background: var(--bg-panel-2);
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+
+.sub-button:hover {
+  border-color: var(--gold);
+}
+
+.mute-button {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+  width: 46px;
+  height: 46px;
+  font-size: 20px;
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+}
+
+.mute-button:hover {
+  border-color: var(--gold);
+}
+
+/* ---------- タイトル画面 ---------- */
+
+.title-screen {
+  min-height: 100vh;
+}
+
+.title-screen.active {
+  display: flex;
+}
+
+.title-inner {
+  max-width: 720px;
+  margin: auto;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.title-eyebrow {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  letter-spacing: 4px;
+  color: var(--green);
+  margin: 0 0 18px;
+}
+
+.title-logo {
+  margin: 0;
+  line-height: 1.25;
+}
+
+.title-small {
+  display: block;
+  font-size: 28px;
+  color: var(--red);
+  text-shadow: 2px 2px 0 #000;
+}
+
+.title-main {
+  display: block;
+  font-size: 52px;
+  color: var(--gold);
+  text-shadow: 3px 3px 0 #000, 6px 6px 0 rgba(241, 196, 83, 0.25);
+}
+
+.title-tagline {
+  margin: 18px 0 8px;
+  font-size: 20px;
+  color: var(--text-dim);
+}
+
+.title-horses {
+  font-size: 34px;
+  letter-spacing: 12px;
+  margin: 10px 0 26px;
+}
+
+.title-horses span {
+  display: inline-block;
+  transform: scaleX(-1);
+  animation: title-bob 0.7s ease-in-out infinite;
+}
+
+.title-horses span:nth-child(2) { animation-delay: 0.15s; }
+.title-horses span:nth-child(3) { animation-delay: 0.3s; }
+.title-horses span:nth-child(4) { animation-delay: 0.45s; }
+
+@keyframes title-bob {
+  0%, 100% { transform: scaleX(-1) translateY(0); }
+  50% { transform: scaleX(-1) translateY(-8px); }
+}
+
+.title-notes {
+  margin: 30px auto 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-dim);
+  font-size: 15px;
+  text-align: left;
+  max-width: 480px;
+}
+
+.title-notes li {
+  margin: 6px 0;
+}
+
+/* ---------- 設定画面 ---------- */
+
+.setup-screen.active {
+  display: flex;
+  justify-content: center;
+}
+
+.setup-inner {
+  width: min(680px, 100%);
+  padding: 48px 24px 80px;
+}
+
+.setup-inner h2 {
+  margin: 0 0 6px;
+  font-size: 34px;
+  color: var(--gold);
+}
+
+.setup-note {
+  color: var(--text-dim);
+  margin: 0 0 20px;
+}
+
+.count-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.count-buttons button {
+  flex: 1;
+  padding: 14px 0;
+  font-size: 19px;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-radius: 4px;
+}
+
+.count-buttons button.selected {
+  background: var(--gold);
+  color: #1b1912;
+  border-color: #fff2cf;
+  box-shadow: 0 3px 0 #8a6b1e;
+}
+
+.name-inputs {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.name-input {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-left: 8px solid var(--player-color, var(--gold));
+  border-radius: 4px;
+}
+
+.name-input span {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--player-color, var(--gold));
+  white-space: nowrap;
+}
+
+.name-input input {
+  flex: 1;
+  padding: 10px 12px;
+  font-family: var(--font-jp);
+  font-size: 18px;
+  color: var(--text);
+  background: var(--bg);
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  min-width: 0;
+}
+
+.name-input input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.setup-rule {
+  padding: 16px 20px;
+  margin-bottom: 26px;
+  background: var(--bg-panel);
+  border: 2px dashed var(--line);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+.setup-rule p {
+  margin: 0 0 8px;
+  color: var(--gold);
+}
+
+.setup-rule ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.setup-rule li {
+  margin: 4px 0;
+}
+
+.setup-rule strong {
+  color: var(--text);
+}
+
+/* ---------- ゲーム画面 ---------- */
+
+.app-shell {
+  width: min(1160px, 100%);
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+  display: grid;
+  gap: 18px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--green);
+}
+
+.topbar h1 {
+  margin: 2px 0 0;
+  font-size: 30px;
+  color: var(--gold);
+  text-shadow: 2px 2px 0 #000;
+}
+
+.scoreboard {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 18px;
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-radius: 4px;
+}
+
+.scoreboard span {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.scoreboard strong {
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  color: var(--gold);
+}
+
+/* プレイヤーバー */
+
+.player-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.player-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-left: 8px solid var(--player-color);
+  border-radius: 4px;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.player-badge.active {
+  border-color: var(--player-color);
+  box-shadow: 0 0 0 2px var(--player-color), 0 0 18px rgba(255, 255, 255, 0.12);
+  animation: badge-pulse 1s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.player-icon {
+  font-size: 18px;
+}
+
+.player-name {
+  font-size: 16px;
+}
+
+.player-money {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--gold);
+}
+
+.player-money small {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-left: 2px;
+}
+
+/* クライアントボード */
+
+.client-board {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 18px;
+  padding: 20px 22px;
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-radius: 6px;
+}
+
+.client-copy h2 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  color: var(--text);
+}
+
+.client-copy p {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.brief-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.brief-stats div {
+  padding: 10px 12px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.brief-stats dt {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.brief-stats dd {
+  margin: 2px 0 0;
+  font-size: 15px;
+  color: var(--gold);
+}
+
+/* レース画面 */
+
+.race-visual {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #101d2c 0%, #16283a 30%, var(--turf) 30%, var(--turf) 100%);
+}
+
+.race-visual.flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  animation: photo-flash 0.9s ease-out forwards;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes photo-flash {
+  0% { opacity: 0.95; }
+  100% { opacity: 0; }
+}
+
+.stadium-sky {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+}
+
+.billboard {
+  padding: 8px 14px;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--gold);
+  background: #0b1520;
+  border: 2px solid #2c4258;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.screen-board {
+  flex: 1;
+  padding: 8px 14px;
+  font-size: 16px;
+  color: #9fe8c1;
+  background: #06130c;
+  border: 2px solid #1d4630;
+  border-radius: 4px;
+  min-height: 22px;
+  text-shadow: 0 0 6px rgba(120, 255, 170, 0.5);
+}
+
+.race-hud {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 0 16px 10px;
+}
+
+.race-hud div {
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+.race-hud span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.race-hud strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.track {
+  position: relative;
+  display: grid;
+  padding: 8px 0 14px;
+}
+
+.lane {
+  position: relative;
+  height: 64px;
+  border-top: 2px dashed rgba(255, 255, 255, 0.14);
+  background: repeating-linear-gradient(90deg, var(--turf) 0 90px, var(--turf-2) 90px 180px);
+}
+
+.lane:first-child {
+  border-top: none;
+}
+
+.horse {
+  position: absolute;
+  left: 10px;
+  top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.75s cubic-bezier(0.25, 0.6, 0.35, 1);
+  will-change: transform;
+}
+
+.runner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.horse-emoji {
+  display: inline-block;
+  transform: scaleX(-1);
+}
+
+.horse.running .runner-icon {
+  animation: gallop 0.35s ease-in-out infinite;
+}
+
+@keyframes gallop {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-5px) rotate(3deg); }
+}
+
+.runner-card {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.runner-card strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.runner-card span {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.lane-chips {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.lane-chips i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+}
+
+.finish-line {
+  position: absolute;
+  top: 118px;
+  bottom: 14px;
+  right: 34px;
+  width: 14px;
+  background: repeating-conic-gradient(#fff 0% 25%, #111 0% 50%) 0 0 / 14px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+
+.finish-line span {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+
+/* 馬券売り場 */
+
+.selection-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--text);
+}
+
+.bet-indicator {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bet-turn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 18px;
+  background: var(--player-color);
+  color: #14120e;
+  border-radius: 4px;
+  border: 2px solid #fff;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+  animation: badge-pulse 1s ease-in-out infinite;
+}
+
+.bet-turn-note {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+.bet-done {
+  font-size: 18px;
+  color: var(--gold);
+}
+
+.bet-amounts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bet-amounts-label {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+.bet-amounts button {
+  padding: 8px 18px;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-radius: 4px;
+}
+
+.bet-amounts button.selected {
+  background: var(--green);
+  color: #06130c;
+  border-color: #b8f0d4;
+  box-shadow: 0 3px 0 #1d5c3f;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.plan-card {
+  position: relative;
+  text-align: left;
+  padding: 14px 16px;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.plan-card:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: var(--gold);
+  box-shadow: 0 6px 0 rgba(241, 196, 83, 0.25);
+}
+
+.plan-topline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.gate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: #14120e;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.horse-name {
+  flex: 1;
+  font-size: 15px;
+  color: var(--gold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.odds {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+.plan-card h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.plan-card p {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.plan-card .allocation {
+  color: #8fd4b0;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.stats span {
+  padding: 3px 8px;
+  font-size: 12px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-dim);
+}
+
+.bet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  min-height: 4px;
+}
+
+.bet-chip,
+.mini-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 13px;
+  background: var(--player-color);
+  color: #14120e;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+/* ログ・結果 */
+
+.live-panel {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.event-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.event-log li {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--line);
+  border-radius: 4px;
+}
+
+.result-panel {
+  padding: 18px 20px;
+  background: var(--bg-panel);
+  border: 2px solid var(--gold);
+  border-radius: 6px;
+}
+
+.result-panel.hidden {
+  display: none;
+}
+
+.result-panel h3 {
+  margin: 0 0 12px;
+  color: var(--gold);
+  font-size: 20px;
+}
+
+.ranking {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.ranking li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 15px;
+}
+
+.ranking li strong {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.payout-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+.payout-table th,
+.payout-table td {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.payout-table th {
+  background: var(--bg-panel-2);
+  color: var(--text-dim);
+  font-weight: normal;
+  font-size: 12px;
+}
+
+.payout-table .plus,
+.winner-payouts .plus {
+  color: #7dedb2;
+}
+
+.payout-table .minus,
+.winner-payouts .minus {
+  color: var(--red);
+}
+
+.next-button {
+  width: 100%;
+  padding: 13px 0;
+  font-family: var(--font-jp);
+  font-size: 19px;
+  color: #1b1912;
+  background: var(--gold);
+  border: 2px solid #fff2cf;
+  border-radius: 4px;
+  box-shadow: 0 4px 0 #8a6b1e;
+}
+
+.next-button:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+/* カットイン */
+
+.cut-in {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.cut-in.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cut-in > div {
+  width: min(560px, calc(100% - 40px));
+  padding: 26px 30px;
+  text-align: center;
+  background: linear-gradient(135deg, #3d1420, #14120e 70%);
+  border: 3px solid var(--red);
+  border-radius: 8px;
+  transform: skewX(-3deg);
+  box-shadow: 0 0 40px rgba(255, 92, 92, 0.35);
+  animation: cutin-slam 0.3s ease-out;
+}
+
+@keyframes cutin-slam {
+  0% { transform: skewX(-3deg) scale(1.5); opacity: 0; }
+  100% { transform: skewX(-3deg) scale(1); opacity: 1; }
+}
+
+.cut-in p {
+  margin: 0 0 6px;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--red);
+  letter-spacing: 2px;
+}
+
+.cut-in strong {
+  display: block;
+  font-size: 26px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.cut-in span {
+  display: block;
+  font-size: 16px;
+  color: var(--text-dim);
+  margin-bottom: 18px;
+}
+
+.cut-in-button {
+  padding: 10px 30px;
+  font-family: var(--font-jp);
+  font-size: 17px;
+  color: #14120e;
+  background: var(--red);
+  border: 2px solid #ffd2d2;
+  border-radius: 4px;
+  box-shadow: 0 3px 0 #7e2626;
+}
+
+/* 勝者モーダル */
+
+.winner-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+
+.winner-modal.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.winner-modal > div {
+  width: min(520px, calc(100% - 40px));
+  padding: 30px 34px;
+  text-align: center;
+  background: linear-gradient(160deg, #2b2410, var(--bg-panel) 70%);
+  border: 3px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: 0 0 50px rgba(241, 196, 83, 0.3);
+  animation: winner-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes winner-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.winner-modal p {
+  margin: 0 0 8px;
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--gold);
+  letter-spacing: 2px;
+}
+
+.winner-modal strong {
+  display: block;
+  font-size: 34px;
+  color: var(--gold);
+  text-shadow: 2px 2px 0 #000;
+  margin-bottom: 8px;
+}
+
+.winner-modal > div > span {
+  display: block;
+  font-size: 16px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+
+.winner-payouts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.winner-payouts b {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+}
+
+/* ---------- 最終結果 ---------- */
+
+.final-screen {
+  position: relative;
+  min-height: 100vh;
+}
+
+.final-screen.active {
+  display: flex;
+}
+
+.confetti {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.final-inner {
+  position: relative;
+  z-index: 2;
+  width: min(640px, calc(100% - 40px));
+  margin: auto;
+  padding: 48px 0 80px;
+  text-align: center;
+}
+
+.final-inner h2 {
+  margin: 0 0 26px;
+  font-size: 38px;
+  color: var(--gold);
+  text-shadow: 3px 3px 0 #000;
+}
+
+.final-standings {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.final-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-left: 10px solid var(--player-color);
+  border-radius: 6px;
+  text-align: left;
+}
+
+.final-row.rank-0 {
+  border-color: var(--gold);
+  border-left-color: var(--player-color);
+  background: linear-gradient(90deg, rgba(241, 196, 83, 0.14), var(--bg-panel) 60%);
+  transform: scale(1.04);
+  box-shadow: 0 0 26px rgba(241, 196, 83, 0.25);
+}
+
+.final-rank {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--gold);
+  width: 52px;
+  flex-shrink: 0;
+}
+
+.final-name {
+  flex: 1;
+  font-size: 21px;
+}
+
+.final-money {
+  font-family: var(--font-pixel);
+  font-size: 15px;
+  color: var(--gold);
+}
+
+.final-money .debt {
+  display: block;
+  font-family: var(--font-jp);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.final-comment {
+  color: var(--text-dim);
+  margin: 0 0 30px;
+  font-size: 16px;
+}
+
+.final-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.share-button {
+  border-color: #4ba3ff;
+}
+
+/* ---------- レスポンシブ ---------- */
+
+@media (max-width: 860px) {
+  .client-board,
+  .live-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .title-main {
+    font-size: 36px;
+  }
+
+  .topbar h1 {
+    font-size: 22px;
+  }
+
+  .race-hud {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .runner-card strong {
+    font-size: 12px;
+  }
+}
