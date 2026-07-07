@@ -10,21 +10,51 @@ const LANE_COLORS = ["#f1c453", "#4ba3ff", "#f06c9b", "#36b37e"];
 const BET_AMOUNTS = [100, 300, 500];
 const START_MONEY = 1000;
 const EMERGENCY_FUND = 500;
-const TOTAL_TICKS = 12;
-const INCIDENT_TICKS = [3, 6, 9];
+const ROUNDS_PER_GAME = 5;
+const TOTAL_TICKS = 16;
+const TICK_MS = 1050;
+const INCIDENT_TICKS = [5, 9, 13];
+
+// 脚質: レースごとに各馬へランダムに割り当てられ、展開が毎回変わる
+const RUN_STYLES = {
+  nige: {
+    label: "逃げ",
+    icon: "💨",
+    curve: (t) => (t <= 6 ? 1.3 : t <= 11 ? 0.97 : 0.76),
+  },
+  senko: {
+    label: "先行",
+    icon: "🚶",
+    curve: (t) => (t <= 6 ? 1.12 : 0.99),
+  },
+  sashi: {
+    label: "差し",
+    icon: "⚡",
+    curve: (t) => (t <= 8 ? 0.82 : 1.28),
+  },
+  oikomi: {
+    label: "追込",
+    icon: "🚀",
+    curve: (t) => (t <= 10 ? 0.71 : 1.62),
+  },
+};
 
 const state = {
   players: [], // { name, color, icon, money, borrowed }
   playerCount: 2,
   round: 0,
+  gameCases: [], // 今ゲームで出題される案件（ランダム5件）
   bets: [], // { player, plan, amount }
   betOrder: [],
   betTurn: 0,
   betAmount: 100,
   bettingOpen: false,
   running: false,
-  scores: [],
+  runners: [], // { progress, style, condition }
   raceIncidents: [],
+  highlights: [], // { tick, icon, text }
+  lastLeader: -1,
+  incidentMessageUntil: -1,
   confettiRaf: null,
 };
 
@@ -37,7 +67,7 @@ const els = {};
   "raceVisual", "raceMessage", "racePhase", "raceLeader", "raceIncident",
   "track", "betIndicator", "betAmounts", "plansGrid",
   "eventLog", "resultPanel",
-  "cutIn", "cutInType", "cutInTitle", "cutInBody", "cutInContinue",
+  "highlightModal", "highlightStyles", "highlightList", "highlightClose",
   "winnerModal", "winnerName", "winnerSummary", "winnerPayouts", "winnerClose",
   "finalStandings", "finalComment", "rematchButton", "changeMembersButton", "shareButton",
   "confetti", "muteButton",
@@ -85,6 +115,10 @@ function weightedBase(plan) {
   return fit * 0.42 + stability * 0.24 + burst * 0.2 + client * 0.14;
 }
 
+function currentCase() {
+  return state.gameCases[state.round];
+}
+
 // ---------- 画面遷移 ----------
 
 function showScreen(name) {
@@ -120,21 +154,45 @@ function initPlayers() {
   }));
 }
 
+function startGame() {
+  state.round = 0;
+  state.gameCases = shuffle(CASES).slice(0, ROUNDS_PER_GAME);
+  showScreen("screen-game");
+  startRound();
+}
+
+// ---------- 脚質割り当て ----------
+
+function pickStyle(plan) {
+  const { stability, burst } = plan.stats;
+  const pool = [];
+  pool.push(...Array(Math.max(1, Math.round(stability / 22))).fill("senko"));
+  pool.push(...Array(Math.max(1, Math.round(stability / 30))).fill("nige"));
+  pool.push(...Array(Math.max(1, Math.round(burst / 22))).fill("sashi"));
+  pool.push(...Array(Math.max(1, Math.round(burst / 28))).fill("oikomi"));
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 // ---------- ラウンド進行 ----------
 
 function startRound() {
-  const item = CASES[state.round];
+  const item = currentCase();
   state.bets = [];
   state.betTurn = 0;
   state.running = false;
   state.bettingOpen = true;
   state.betOrder = state.players.map((_, i) => (i + state.round) % state.players.length);
-  state.scores = item.plans.map((plan) => ({
-    score: weightedBase(plan) + randomBetween(-4, 4),
+  state.runners = item.plans.map((plan) => ({
+    progress: 0,
+    style: pickStyle(plan),
+    condition: randomBetween(0.86, 1.18), // 当日の学習の調子
   }));
   state.raceIncidents = shuffle([...item.incidents, ...shuffle(GENERIC_INCIDENTS).slice(0, 2)]).slice(0, 3);
+  state.highlights = [];
+  state.lastLeader = -1;
+  state.incidentMessageUntil = -1;
 
-  els.roundLabel.textContent = `${state.round + 1} / ${CASES.length}`;
+  els.roundLabel.textContent = `${state.round + 1} / ${ROUNDS_PER_GAME}`;
   els.clientName.textContent = item.client;
   els.clientBrief.textContent = item.brief;
   els.clientIndustry.textContent = item.industry;
@@ -147,6 +205,7 @@ function startRound() {
   els.resultPanel.classList.add("hidden");
   els.resultPanel.innerHTML = "";
   hideWinnerModal();
+  hideHighlights();
   renderPlans(item);
   renderTrack(item);
   renderPlayerBar();
@@ -205,7 +264,7 @@ function placeBet(planIndex) {
   if (!state.bettingOpen || state.running) return;
   const idx = currentBetterIndex();
   const player = state.players[idx];
-  const item = CASES[state.round];
+  const item = currentCase();
   const plan = item.plans[planIndex];
   const amount = Math.min(state.betAmount, player.money);
   if (amount <= 0) return;
@@ -307,7 +366,7 @@ function renderTrack(item) {
 }
 
 function renderLaneChips() {
-  const item = CASES[state.round];
+  const item = currentCase();
   item.plans.forEach((_, planIndex) => {
     const holder = document.getElementById(`laneChips-${planIndex}`);
     if (!holder) return;
@@ -324,7 +383,7 @@ function renderLaneChips() {
 // ---------- レース ----------
 
 async function beginRace() {
-  const item = CASES[state.round];
+  const item = currentCase();
   state.running = true;
   els.raceMessage.textContent = "ゲートイン完了。全員の胃が痛くなり始めた。";
   updateRaceHud("ゲートイン", "未確定", "まだ平和");
@@ -338,43 +397,39 @@ async function beginRace() {
   [...els.track.querySelectorAll(".horse")].forEach((horse) => horse.classList.add("running"));
 
   for (let tick = 1; tick <= TOTAL_TICKS; tick += 1) {
-    await sleep(820);
-    Sound.se.tick();
+    await sleep(TICK_MS);
     updateRaceHud(`第${tick}コーナー / ${TOTAL_TICKS}`, null, null);
-    advanceScores(item, tick);
-    renderRacePositions(item);
+    advanceProgress(item, tick);
 
     const incidentSlot = INCIDENT_TICKS.indexOf(tick);
     if (incidentSlot !== -1) {
-      await playIncident(item, state.raceIncidents[incidentSlot]);
+      applyIncidentLive(item, state.raceIncidents[incidentSlot], tick);
     }
+
+    renderRacePositions(item, tick);
+    trackLeaderChange(item, tick);
   }
 
-  await sleep(650);
+  await sleep(900);
   finishRace(item);
 }
 
-function advanceScores(item, tick) {
+function advanceProgress(item, tick) {
   item.plans.forEach((plan, index) => {
-    const { fit, stability, burst } = plan.stats;
-    const pace = fit * 0.07 + stability * 0.045 + randomBetween(-2.8, 3.2);
-    const lateBurst = tick > 7 ? burst * 0.045 + randomBetween(-1.5, 4.5) : 0;
-    state.scores[index].score = clamp(state.scores[index].score + pace + lateBurst, 15, 185);
+    const runner = state.runners[index];
+    const curve = RUN_STYLES[runner.style].curve(tick);
+    const gain = (weightedBase(plan) / TOTAL_TICKS) * curve * runner.condition * randomBetween(0.88, 1.14);
+    runner.progress += gain;
   });
 }
 
-async function playIncident(item, incident) {
+function applyIncidentLive(item, incident, tick) {
   Sound.se.alarm();
-  showCutIn(incident);
-  addLog(`⚡ ${incident.type}: ${incident.title}。${incident.body}`);
-  updateRaceHud("審議中", null, incident.title);
-  applyIncident(item, incident);
-  renderRacePositions(item);
-  await waitForCutInContinue();
-  hideCutIn();
-}
+  let worstIndex = 0;
+  let worstDelta = Infinity;
+  let bestIndex = 0;
+  let bestDelta = -Infinity;
 
-function applyIncident(item, incident) {
   item.plans.forEach((plan, index) => {
     const effects = incident.effect;
     const profile =
@@ -382,79 +437,156 @@ function applyIncident(item, incident) {
       (effects.stability || 0) * (plan.stats.stability / 100) +
       (effects.burst || 0) * (plan.stats.burst / 100) +
       (effects.client || 0) * (plan.stats.client / 100);
-    const chaos = randomBetween(-7, 7);
-    state.scores[index].score = clamp(state.scores[index].score + profile + chaos, 10, 198);
+    const delta = profile * 0.55 + randomBetween(-2.4, 2.4);
+    state.runners[index].progress = Math.max(2, state.runners[index].progress + delta);
+    if (delta < worstDelta) {
+      worstDelta = delta;
+      worstIndex = index;
+    }
+    if (delta > bestDelta) {
+      bestDelta = delta;
+      bestIndex = index;
+    }
+  });
+
+  updateRaceHud(null, null, incident.title);
+  els.raceMessage.textContent = `⚡ ${incident.type}: ${incident.title}`;
+  state.incidentMessageUntil = tick + 1;
+  addLog(`⚡ ${incident.type}: ${incident.title}。${incident.body}`);
+
+  let impact = "";
+  if (worstDelta < -1.5) {
+    impact = `直撃したのは ${item.plans[worstIndex].horse}。`;
+  } else if (bestDelta > 1.5) {
+    impact = `追い風を受けたのは ${item.plans[bestIndex].horse}。`;
+  }
+  state.highlights.push({
+    tick,
+    icon: "⚡",
+    text: `${incident.type}「${incident.title}」— ${incident.body}${impact ? " " + impact : ""}`,
   });
 }
 
-function renderRacePositions(item, isFinal = false) {
-  const ranked = state.scores
-    .map((entry, index) => ({ ...entry, index }))
-    .sort((a, b) => b.score - a.score);
+function trackLeaderChange(item, tick) {
+  const leader = state.runners
+    .map((runner, index) => ({ progress: runner.progress, index }))
+    .sort((a, b) => b.progress - a.progress)[0].index;
 
-  ranked.forEach((entry, rank) => {
-    const horse = document.getElementById(`horse-${entry.index}`);
+  if (state.lastLeader === -1) {
+    state.highlights.push({
+      tick,
+      icon: "🏁",
+      text: `${item.plans[leader].horse}（${RUN_STYLES[state.runners[leader].style].label}）が飛び出して先頭に。`,
+    });
+  } else if (leader !== state.lastLeader) {
+    state.highlights.push({
+      tick,
+      icon: "🔄",
+      text: `${item.plans[leader].horse}（${RUN_STYLES[state.runners[leader].style].label}）が ${item.plans[state.lastLeader].horse} をかわして先頭に立つ！`,
+    });
+    addLog(`🔄 第${tick}コーナー: ${item.plans[leader].horse} が先頭を奪う！`);
+  }
+  state.lastLeader = leader;
+}
+
+function renderRacePositions(item, tick, finalRanks = null) {
+  const ranked = state.runners
+    .map((runner, index) => ({ progress: runner.progress, index }))
+    .sort((a, b) => b.progress - a.progress);
+
+  const leaderProgress = Math.max(1, ranked[0].progress);
+  const leaderFraction = clamp(0.05 + 0.9 * (tick / TOTAL_TICKS), 0.05, 0.94);
+
+  state.runners.forEach((runner, index) => {
+    const horse = document.getElementById(`horse-${index}`);
     if (!horse) return;
     const usable = getUsableDistance(horse);
-    let distance;
-    if (isFinal) {
-      distance = rank === 0 ? usable + 46 : Math.round(usable * clamp(0.92 - rank * 0.13, 0.4, 0.95));
+    let fraction;
+    if (finalRanks) {
+      const rank = finalRanks.indexOf(index);
+      fraction = rank === 0 ? 1.0 : clamp(0.93 - rank * 0.08, 0.4, 0.93);
     } else {
-      const leaderBoost = rank === 0 ? 0.045 : 0;
-      const fraction = clamp(entry.score / 190 + leaderBoost, 0.02, 0.92);
-      distance = Math.round(usable * fraction);
+      fraction = leaderFraction * Math.pow(runner.progress / leaderProgress, 2.2);
     }
+    const distance = finalRanks && finalRanks.indexOf(index) === 0
+      ? usable + 14
+      : Math.round(usable * fraction);
     horse.style.transform = `translateX(${distance}px)`;
-    const label = horse.querySelector(".runner-card span");
-    if (label) label.textContent = `${item.plans[entry.index].media} / KPI ${Math.round(entry.score)}%`;
+    horse.classList.toggle("flip", fraction > 0.72);
+    horse.style.zIndex = String(10 - ranked.findIndex((r) => r.index === index));
+    const label = horse.querySelector(".runner-card > span");
+    if (label) label.textContent = `${item.plans[index].media} / KPI ${Math.round(runner.progress * 1.9)}%`;
   });
 
   const leader = item.plans[ranked[0].index];
-  updateRaceHud(null, `${leader.horse} / KPI ${Math.round(ranked[0].score)}%`, null);
-  if (!isFinal) {
-    els.raceMessage.textContent = `現在先頭: ${leader.horse} / KPI ${Math.round(ranked[0].score)}%。まだ何も信用できません。`;
+  updateRaceHud(null, `${leader.horse} / KPI ${Math.round(ranked[0].progress * 1.9)}%`, null);
+  if (!finalRanks && tick > state.incidentMessageUntil) {
+    els.raceMessage.textContent = `現在先頭: ${leader.horse}。まだ何も信用できません。`;
   }
 }
 
 function getUsableDistance(horse) {
   const trackRect = els.track.getBoundingClientRect();
   const finishRect = document.querySelector(".finish-line")?.getBoundingClientRect();
-  const horseWidth = horse.getBoundingClientRect().width || 260;
-  const horseLeft = horse.offsetLeft || 10;
+  const horseLeft = horse.offsetLeft || 12;
+  const iconWidth = 44;
   if (finishRect && trackRect.width > 0) {
-    const finishX = finishRect.left - trackRect.left;
-    return Math.max(60, finishX - horseLeft - horseWidth + 24);
+    return Math.max(60, finishRect.left - trackRect.left + finishRect.width - horseLeft - iconWidth);
   }
-  return Math.max(60, trackRect.width - horseWidth - 40);
+  return Math.max(60, trackRect.width - horseLeft - iconWidth - 40);
 }
 
 // ---------- 決着と払い戻し ----------
 
 function finishRace(item) {
-  const result = state.scores
-    .map((entry, index) => {
+  const result = state.runners
+    .map((runner, index) => {
       const plan = item.plans[index];
-      const clientAdjustment = plan.stats.client * randomBetween(-0.03, 0.07);
-      const finalScore = clamp(entry.score + clientAdjustment + randomBetween(-4, 6), 1, 220);
+      const clientAdjustment = plan.stats.client * randomBetween(-0.02, 0.05);
+      const finalScore = runner.progress + clientAdjustment + randomBetween(-2.5, 3.5);
       return { index, finalScore };
     })
     .sort((a, b) => b.finalScore - a.finalScore);
 
   result.forEach((entry) => {
-    state.scores[entry.index].score = entry.finalScore;
+    state.runners[entry.index].progress = entry.finalScore;
   });
 
+  const finalRanks = result.map((entry) => entry.index);
+  const winner = result[0];
+  const second = result[1];
+  const winnerPlan = item.plans[winner.index];
+  const winnerStyle = RUN_STYLES[state.runners[winner.index].style];
+
+  // 決着ハイライト
+  if (winner.index === state.lastLeader && (winnerStyle.label === "逃げ" || winnerStyle.label === "先行")) {
+    state.highlights.push({
+      tick: TOTAL_TICKS,
+      icon: "🏆",
+      text: `${winnerPlan.horse} がそのまま押し切って1着！ 見事な${winnerStyle.label}切り。`,
+    });
+  } else if (winnerStyle.label === "追込" || winnerStyle.label === "差し") {
+    state.highlights.push({
+      tick: TOTAL_TICKS,
+      icon: "🏆",
+      text: `最後の直線、${winnerPlan.horse} が大外から一気に突き抜けて1着！ 鮮やかな${winnerStyle.label}決着。`,
+    });
+  } else {
+    state.highlights.push({
+      tick: TOTAL_TICKS,
+      icon: "🏆",
+      text: `混戦を制したのは ${winnerPlan.horse}。着差はわずか、胃へのダメージは甚大。`,
+    });
+  }
+
   [...els.track.querySelectorAll(".horse")].forEach((horse) => horse.classList.remove("running"));
-  renderRacePositions(item, true);
+  renderRacePositions(item, TOTAL_TICKS, finalRanks);
   els.raceVisual.classList.add("flash");
   setTimeout(() => els.raceVisual.classList.remove("flash"), 900);
   Sound.stopBgm();
   Sound.se.goal();
 
-  const winner = result[0];
-  const second = result[1];
-  const winnerPlan = item.plans[winner.index];
-  updateRaceHud("確定", `${winnerPlan.horse} / KPI ${Math.round(winner.finalScore)}%`, "レース確定");
+  updateRaceHud("確定", `${winnerPlan.horse} / KPI ${Math.round(winner.finalScore * 1.9)}%`, "レース確定");
 
   // 払い戻し: 1着はオッズ×賭け金、2着は賭け金返還
   const payouts = state.bets.map((bet) => {
@@ -487,23 +619,28 @@ function finishRace(item) {
   renderPlayerBar();
   renderResultPanel(item, result, payouts);
   state.running = false;
-  showWinnerModal(item, winnerPlan, winner.finalScore, payouts, anyoneWon);
+
+  // ゴール後: まずハイライト、その後に払い戻しモーダル
+  setTimeout(() => {
+    showHighlights(item, () => showWinnerModal(item, winnerPlan, winner.finalScore, payouts, anyoneWon));
+  }, 1300);
 }
 
 function renderResultPanel(item, result, payouts) {
-  const isLastRound = state.round === CASES.length - 1;
+  const isLastRound = state.round === ROUNDS_PER_GAME - 1;
   els.resultPanel.innerHTML = `
     <h3>🏁 決着: ${item.plans[result[0].index].name}</h3>
     <ol class="ranking">
       ${result
         .map((entry, rank) => {
           const plan = item.plans[entry.index];
+          const style = RUN_STYLES[state.runners[entry.index].style];
           const medal = ["🥇", "🥈", "🥉", "　"][rank];
           return `
             <li>
               <strong>${medal} ${rank + 1}着</strong>
-              <span>${plan.horse}</span>
-              <span>${Math.round(entry.finalScore)}%</span>
+              <span>${plan.horse} <small class="style-tag">${style.label}</small></span>
+              <span>${Math.round(entry.finalScore * 1.9)}%</span>
             </li>
           `;
         })
@@ -531,22 +668,61 @@ function renderResultPanel(item, result, payouts) {
           .join("")}
       </tbody>
     </table>
-    <button class="next-button" type="button" id="nextRoundButton">${isLastRound ? "🏆 最終結果を見る" : "▶ 次の案件へ"}</button>
+    <div class="result-buttons">
+      <button class="sub-button" type="button" id="replayHighlights">📜 ハイライトを見る</button>
+      <button class="next-button" type="button" id="nextRoundButton">${isLastRound ? "🏆 最終結果を見る" : "▶ 次の案件へ"}</button>
+    </div>
   `;
   els.resultPanel.classList.remove("hidden");
   els.resultPanel.querySelector("#nextRoundButton").addEventListener("click", () => {
     Sound.se.ui();
     nextRound();
   });
+  els.resultPanel.querySelector("#replayHighlights").addEventListener("click", () => {
+    Sound.se.ui();
+    showHighlights(item, null);
+  });
 }
 
 function nextRound() {
   state.round += 1;
-  if (state.round >= CASES.length) {
+  if (state.round >= ROUNDS_PER_GAME) {
     showFinal();
   } else {
     startRound();
   }
+}
+
+// ---------- ハイライトポップアップ ----------
+
+let highlightCallback = null;
+
+function showHighlights(item, onClose) {
+  highlightCallback = onClose || null;
+  els.highlightStyles.innerHTML = item.plans
+    .map((plan, index) => {
+      const style = RUN_STYLES[state.runners[index].style];
+      return `<span class="style-chip" style="--lane-color:${LANE_COLORS[index]}">${style.icon} ${plan.horse}【${style.label}】</span>`;
+    })
+    .join("");
+  els.highlightList.innerHTML = state.highlights
+    .map((h) => `
+      <li>
+        <span class="hl-tick">${h.tick === TOTAL_TICKS ? "GOAL" : `第${h.tick}角`}</span>
+        <span class="hl-icon">${h.icon}</span>
+        <span class="hl-text">${escapeHtml(h.text)}</span>
+      </li>
+    `)
+    .join("");
+  els.highlightClose.textContent = onClose ? "払い戻しへ ▶" : "閉じる";
+  els.highlightModal.classList.add("show");
+  els.highlightModal.setAttribute("aria-hidden", "false");
+  els.highlightClose.focus();
+}
+
+function hideHighlights() {
+  els.highlightModal.classList.remove("show");
+  els.highlightModal.setAttribute("aria-hidden", "true");
 }
 
 // ---------- 最終結果 ----------
@@ -600,9 +776,7 @@ function rematch() {
     player.money = START_MONEY;
     player.borrowed = 0;
   });
-  state.round = 0;
-  showScreen("screen-game");
-  startRound();
+  startGame();
 }
 
 // ---------- 紙吹雪 ----------
@@ -661,47 +835,11 @@ function stopConfetti() {
   ctx2d.clearRect(0, 0, els.confetti.width, els.confetti.height);
 }
 
-// ---------- カットイン / モーダル ----------
-
-let cutInTimer = null;
-
-function showCutIn(incident) {
-  els.cutInType.textContent = incident.type;
-  els.cutInTitle.textContent = incident.title;
-  els.cutInBody.textContent = incident.body;
-  els.cutIn.classList.add("show");
-  els.cutIn.setAttribute("aria-hidden", "false");
-}
-
-function hideCutIn() {
-  els.cutIn.classList.remove("show");
-  els.cutIn.setAttribute("aria-hidden", "true");
-}
-
-function waitForCutInContinue() {
-  return new Promise((resolve) => {
-    const done = () => {
-      if (cutInTimer) {
-        clearTimeout(cutInTimer);
-        cutInTimer = null;
-      }
-      els.cutInContinue.disabled = true;
-      els.cutInContinue.onclick = null;
-      resolve();
-    };
-    els.cutInContinue.disabled = false;
-    els.cutInContinue.focus();
-    els.cutInContinue.onclick = () => {
-      Sound.se.ui();
-      done();
-    };
-    cutInTimer = setTimeout(done, 4500); // 放置しても止まらないよう自動で進む
-  });
-}
+// ---------- モーダル ----------
 
 function showWinnerModal(item, winnerPlan, finalScore, payouts, anyoneWon) {
   els.winnerName.textContent = winnerPlan.horse;
-  els.winnerSummary.textContent = `${winnerPlan.name} が KPI ${Math.round(finalScore)}% で優勝。`;
+  els.winnerSummary.textContent = `${winnerPlan.name} が KPI ${Math.round(finalScore * 1.9)}% で優勝。`;
   els.winnerPayouts.innerHTML = payouts
     .map(({ bet, payout }) => {
       const player = state.players[bet.player];
@@ -713,7 +851,7 @@ function showWinnerModal(item, winnerPlan, finalScore, payouts, anyoneWon) {
   els.winnerModal.classList.add("show");
   els.winnerModal.setAttribute("aria-hidden", "false");
   els.winnerClose.focus();
-  setTimeout(() => (anyoneWon ? Sound.se.win() : Sound.se.lose()), 500);
+  setTimeout(() => (anyoneWon ? Sound.se.win() : Sound.se.lose()), 400);
 }
 
 function hideWinnerModal() {
@@ -773,9 +911,7 @@ els.countButtons.addEventListener("click", (event) => {
 els.setupStart.addEventListener("click", () => {
   Sound.se.coin();
   initPlayers();
-  state.round = 0;
-  showScreen("screen-game");
-  startRound();
+  startGame();
 });
 
 els.betAmounts.addEventListener("click", (event) => {
@@ -787,6 +923,16 @@ els.betAmounts.addEventListener("click", (event) => {
     ? state.players[currentBetterIndex()]
     : null;
   updateBetAmountButtons(player);
+});
+
+els.highlightClose.addEventListener("click", () => {
+  Sound.se.ui();
+  hideHighlights();
+  if (highlightCallback) {
+    const callback = highlightCallback;
+    highlightCallback = null;
+    callback();
+  }
 });
 
 els.winnerClose.addEventListener("click", () => {
@@ -811,8 +957,8 @@ els.changeMembersButton.addEventListener("click", () => {
 document.addEventListener("pointerdown", () => Sound.ensure(), { once: true });
 
 window.addEventListener("resize", () => {
-  if (els["screen-game"].classList.contains("active") && state.running && state.scores.length) {
-    renderRacePositions(CASES[state.round]);
+  if (els["screen-game"].classList.contains("active") && state.running && state.runners.length) {
+    renderRacePositions(currentCase(), TOTAL_TICKS / 2);
   }
 });
 

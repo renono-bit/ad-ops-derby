@@ -579,12 +579,11 @@ button:disabled {
 
 .horse {
   position: absolute;
-  left: 10px;
-  top: 6px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: transform 0.75s cubic-bezier(0.25, 0.6, 0.35, 1);
+  left: 12px;
+  top: 8px;
+  width: 44px;
+  height: 44px;
+  transition: transform 1.05s linear;
   will-change: transform;
 }
 
@@ -616,6 +615,9 @@ button:disabled {
 }
 
 .runner-card {
+  position: absolute;
+  left: 52px;
+  top: -2px;
   display: flex;
   flex-direction: column;
   padding: 4px 10px;
@@ -623,6 +625,13 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 4px;
   white-space: nowrap;
+}
+
+/* ゴール付近では名前カードを馬の後ろ側へ回す（アイコンがゴールラインに届くように） */
+.horse.flip .runner-card {
+  left: auto;
+  right: 52px;
+  align-items: flex-end;
 }
 
 .runner-card strong {
@@ -973,74 +982,116 @@ button:disabled {
   box-shadow: none;
 }
 
-/* カットイン */
+/* 実況ハイライト */
 
-.cut-in {
+.highlight-modal {
   position: fixed;
   inset: 0;
   z-index: 60;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.75);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: opacity 0.25s;
 }
 
-.cut-in.show {
+.highlight-modal.show {
   opacity: 1;
   pointer-events: auto;
 }
 
-.cut-in > div {
-  width: min(560px, calc(100% - 40px));
+.highlight-modal > div {
+  width: min(640px, calc(100% - 40px));
+  margin: auto;
   padding: 26px 30px;
-  text-align: center;
-  background: linear-gradient(135deg, #3d1420, #14120e 70%);
-  border: 3px solid var(--red);
+  background: linear-gradient(160deg, #16241c, var(--bg-panel) 70%);
+  border: 3px solid var(--green);
   border-radius: 8px;
-  transform: skewX(-3deg);
-  box-shadow: 0 0 40px rgba(255, 92, 92, 0.35);
-  animation: cutin-slam 0.3s ease-out;
+  box-shadow: 0 0 40px rgba(54, 179, 126, 0.3);
+  animation: winner-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 
-@keyframes cutin-slam {
-  0% { transform: skewX(-3deg) scale(1.5); opacity: 0; }
-  100% { transform: skewX(-3deg) scale(1); opacity: 1; }
-}
-
-.cut-in p {
-  margin: 0 0 6px;
-  font-family: var(--font-pixel);
-  font-size: 12px;
-  color: var(--red);
-  letter-spacing: 2px;
-}
-
-.cut-in strong {
+.highlight-title {
   display: block;
-  font-size: 26px;
+  font-size: 24px;
   color: var(--text);
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
-.cut-in span {
-  display: block;
-  font-size: 16px;
+.highlight-styles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.style-chip {
+  padding: 4px 10px;
+  font-size: 13px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--lane-color, var(--gold));
+  border-radius: 3px;
   color: var(--text-dim);
-  margin-bottom: 18px;
 }
 
-.cut-in-button {
-  padding: 10px 30px;
-  font-family: var(--font-jp);
-  font-size: 17px;
-  color: #14120e;
-  background: var(--red);
-  border: 2px solid #ffd2d2;
+.highlight-list {
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.highlight-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line);
   border-radius: 4px;
-  box-shadow: 0 3px 0 #7e2626;
+}
+
+.hl-tick {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--gold);
+  width: 56px;
+  flex-shrink: 0;
+}
+
+.hl-icon {
+  flex-shrink: 0;
+}
+
+.hl-text {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.style-tag {
+  padding: 1px 6px;
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-dim);
+}
+
+.result-buttons {
+  display: grid;
+  gap: 8px;
+}
+
+.result-buttons .sub-button {
+  text-align: center;
 }
 
 /* 勝者モーダル */
