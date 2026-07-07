@@ -92,6 +92,7 @@ const state = {
   players: [], // { name, color, icon, money, borrowed }
   playerCount: 2,
   raceCount: 5,
+  cutInEnabled: false,
   round: 0,
   gameCases: [], // 今ゲームで出題される案件（ランダム抽選）
   bets: [], // { player, plan, amount }
@@ -111,7 +112,8 @@ const state = {
 const els = {};
 [
   "screen-title", "screen-setup", "screen-game", "screen-final",
-  "titleStart", "countButtons", "nameInputs", "raceCountButtons", "setupStart",
+  "titleStart", "countButtons", "nameInputs", "raceCountButtons", "cutInButtons", "setupStart",
+  "cutIn", "cutInType", "cutInTitle", "cutInBody", "cutInContinue",
   "roundLabel", "playerBar",
   "clientName", "clientBrief", "clientIndustry", "clientKpi", "clientBudget", "clientAbsurdity",
   "raceVisual", "raceMessage", "racePhase", "raceLeader", "raceIncident",
@@ -280,6 +282,7 @@ function startRound() {
   els.resultPanel.innerHTML = "";
   hideWinnerModal();
   hideHighlights();
+  hideCutIn();
   renderPlans(item);
   renderTrack(item);
   renderPlayerBar();
@@ -400,13 +403,6 @@ function renderPlans(item) {
           </div>
           <h3>${plan.name}</h3>
           <p>${plan.setup}</p>
-          <p class="allocation">予算配分: ${plan.allocation}</p>
-          <div class="stats">
-            <span>適性 ${plan.stats.fit}</span>
-            <span>安定 ${plan.stats.stability}</span>
-            <span>爆発 ${plan.stats.burst}</span>
-            <span>顧客 ${plan.stats.client}</span>
-          </div>
           <div class="bet-chips"></div>
         </button>
       `;
@@ -478,7 +474,14 @@ async function beginRace() {
 
     const incidentSlot = INCIDENT_TICKS.indexOf(tick);
     if (incidentSlot !== -1) {
-      applyIncidentLive(item, state.raceIncidents[incidentSlot], tick);
+      const incident = state.raceIncidents[incidentSlot];
+      applyIncidentLive(item, incident, tick);
+      if (state.cutInEnabled) {
+        renderRacePositions(item, tick);
+        showCutIn(incident);
+        await waitForCutInContinue();
+        hideCutIn();
+      }
     }
 
     renderRacePositions(item, tick);
@@ -795,6 +798,44 @@ function nextRound() {
   }
 }
 
+// ---------- カットイン ----------
+
+let cutInTimer = null;
+
+function showCutIn(incident) {
+  els.cutInType.textContent = incident.type;
+  els.cutInTitle.textContent = incident.title;
+  els.cutInBody.textContent = incident.body;
+  els.cutIn.classList.add("show");
+  els.cutIn.setAttribute("aria-hidden", "false");
+}
+
+function hideCutIn() {
+  els.cutIn.classList.remove("show");
+  els.cutIn.setAttribute("aria-hidden", "true");
+}
+
+function waitForCutInContinue() {
+  return new Promise((resolve) => {
+    const done = () => {
+      if (cutInTimer) {
+        clearTimeout(cutInTimer);
+        cutInTimer = null;
+      }
+      els.cutInContinue.disabled = true;
+      els.cutInContinue.onclick = null;
+      resolve();
+    };
+    els.cutInContinue.disabled = false;
+    els.cutInContinue.focus();
+    els.cutInContinue.onclick = () => {
+      Sound.se.ui();
+      done();
+    };
+    cutInTimer = setTimeout(done, 5000); // 放置しても止まらないよう自動で進む
+  });
+}
+
 // ---------- ハイライトポップアップ ----------
 
 let highlightCallback = null;
@@ -1008,6 +1049,16 @@ els.countButtons.addEventListener("click", (event) => {
     b.classList.toggle("selected", b === button);
   });
   renderNameInputs();
+});
+
+els.cutInButtons.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-cutin]");
+  if (!button) return;
+  Sound.se.ui();
+  state.cutInEnabled = button.dataset.cutin === "on";
+  [...els.cutInButtons.querySelectorAll("button")].forEach((b) => {
+    b.classList.toggle("selected", b === button);
+  });
 });
 
 els.raceCountButtons.addEventListener("click", (event) => {

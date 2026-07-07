@@ -54,6 +54,11 @@
           <button type="button" data-count="4">4人</button>
         </div>
         <div id="nameInputs" class="name-inputs"></div>
+        <p class="setup-note">ハプニング演出を選んでください。</p>
+        <div class="count-buttons" id="cutInButtons">
+          <button type="button" data-cutin="off" class="selected">ノンストップ実況</button>
+          <button type="button" data-cutin="on">カットインで一時停止</button>
+        </div>
         <p class="setup-note">レース数（案件数）を選んでください。</p>
         <div class="race-count-buttons" id="raceCountButtons">
           <button type="button" data-races="1">1</button>
@@ -187,6 +192,15 @@
     </section>
 
     <!-- ============ オーバーレイ ============ -->
+    <div id="cutIn" class="cut-in" aria-hidden="true">
+      <div>
+        <p id="cutInType"></p>
+        <strong id="cutInTitle"></strong>
+        <span id="cutInBody"></span>
+        <button id="cutInContinue" class="cut-in-button" type="button">続ける ▶</button>
+      </div>
+    </div>
+
     <div id="highlightModal" class="highlight-modal" aria-hidden="true">
       <div>
         <p class="board-label">RACE HIGHLIGHTS</p>
