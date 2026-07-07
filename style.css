@@ -3,19 +3,28 @@
    ============================================================ */
 
 :root {
+  /* デザイントークン（TURF BROADCAST リデザイン準拠） */
   --bg: #14120e;
-  --bg-panel: #211f1b;
-  --bg-panel-2: #2a2722;
-  --line: #3d382f;
+  --bg-panel: #24211a;
+  --bg-panel-2: #2c2820;
+  --line: #3a352a;
   --gold: #f1c453;
+  --gold-deep: #b8862c;
   --green: #36b37e;
   --turf: #1e3d2a;
   --turf-2: #234a32;
-  --text: #f4efe4;
-  --text-dim: #b3ab99;
+  --text: #f4ecd8;
+  --text-dim: #a99f86;
   --red: #ff5c5c;
+  --r-chip: 2px;
+  --r-card: 6px;
+  --r-modal: 8px;
+  --sh-box: 0 4px 0 rgba(0, 0, 0, 0.55); /* 箱押し */
+  --sh-glow: 0 0 0 2px var(--gold), 0 0 20px rgba(241, 196, 83, 0.5); /* 注目 */
+  /* フォント3役: 数字=pixel / 見出し・馬名=jp(ドット) / 長文本文=body */
   --font-jp: "DotGothic16", "MS Gothic", monospace;
   --font-pixel: "Press Start 2P", "DotGothic16", monospace;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
 }
 
 * {
@@ -30,9 +39,9 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--text);
-  font-family: var(--font-jp);
-  font-size: 17px;
-  line-height: 1.55;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.65;
   background:
     radial-gradient(1200px 500px at 50% -100px, rgba(241, 196, 83, 0.08), transparent),
     repeating-linear-gradient(0deg, transparent 0 3px, rgba(0, 0, 0, 0.12) 3px 4px),
@@ -576,9 +585,11 @@ button:disabled {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  padding-top: 14px;
 }
 
 .player-badge {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -587,7 +598,23 @@ button:disabled {
   border: 2px solid var(--line);
   border-left: 8px solid var(--player-color);
   border-radius: 4px;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition: box-shadow 0.2s, border-color 0.2s, opacity 0.25s;
+}
+
+/* 手番中: 手番以外は暗く沈め、手番には▼マーカー */
+.player-bar.betting .player-badge:not(.active) {
+  opacity: 0.5;
+}
+
+.player-badge.active::after {
+  content: "▼";
+  position: absolute;
+  top: -17px;
+  left: 50%;
+  margin-left: -7px;
+  font-size: 13px;
+  color: var(--player-color);
+  text-shadow: 1px 1px 0 #000;
 }
 
 .player-badge.active {
@@ -621,52 +648,93 @@ button:disabled {
   margin-left: 2px;
 }
 
-/* クライアントボード */
+/* フォント3役: 見出し・馬名・短いラベルはドット、長文は可読フォント（body既定） */
 
-.client-board {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 18px;
-  padding: 20px 22px;
-  background: var(--bg-panel);
-  border: 2px solid var(--line);
-  border-radius: 6px;
+h1, h2, h3,
+.title-tagline,
+.count-buttons button,
+.name-input input,
+.horse-name,
+.runner-card strong,
+.plan-card h3,
+.player-name,
+.final-name,
+.ranking li,
+.cut-in strong,
+.screen-board,
+.race-hud strong,
+.online-card h3,
+.style-chip,
+.style-tag,
+.board-name,
+.turn-plate strong,
+.ribbon-winner,
+.ribbon-title {
+  font-family: var(--font-jp);
 }
 
-.client-copy h2 {
-  margin: 0 0 8px;
-  font-size: 26px;
+/* クライアント情報バー（1本に圧縮） */
+
+.client-bar {
+  padding: 12px 18px;
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-radius: var(--r-card);
+}
+
+.client-bar-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bar-eyebrow {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--gold);
+}
+
+.client-bar-top h2 {
+  margin: 0;
+  font-size: 21px;
   color: var(--text);
 }
 
-.client-copy p {
-  margin: 0;
+.bar-chip {
+  padding: 3px 10px;
+  font-family: var(--font-jp);
+  font-size: 13px;
   color: var(--text-dim);
-}
-
-.brief-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 0;
-}
-
-.brief-stats div {
-  padding: 10px 12px;
   background: var(--bg-panel-2);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--r-chip);
 }
 
-.brief-stats dt {
-  font-size: 12px;
+.bar-chip b {
+  color: var(--gold);
+  font-weight: normal;
+  margin-left: 4px;
+}
+
+.bar-chip.absurd b {
+  color: var(--red);
+  letter-spacing: 1px;
+}
+
+.client-bar-brief {
+  margin: 8px 0 0;
+  font-size: 14px;
   color: var(--text-dim);
 }
 
-.brief-stats dd {
-  margin: 2px 0 0;
-  font-size: 15px;
-  color: var(--gold);
+.layer-label {
+  margin: 0 0 -10px;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
 }
 
 /* レース画面 */
@@ -679,19 +747,74 @@ button:disabled {
   background: linear-gradient(180deg, #101d2c 0%, #16283a 30%, var(--turf) 30%, var(--turf) 100%);
 }
 
-.race-visual.flash::after {
+/* PHOTO FINISH: ゴール時の金バースト */
+.race-visual.photo-finish::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: #fff;
-  animation: photo-flash 0.9s ease-out forwards;
-  pointer-events: none;
   z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(241, 196, 83, 0.5), rgba(255, 255, 255, 0.25) 40%, transparent 72%);
+  animation: gold-burst 1.05s ease-out forwards;
 }
 
-@keyframes photo-flash {
-  0% { opacity: 0.95; }
-  100% { opacity: 0; }
+@keyframes gold-burst {
+  0% { opacity: 0; transform: scale(0.6); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* 事件演出: 微振動 */
+.race-visual.shake {
+  animation: visual-shake 0.45s linear;
+}
+
+@keyframes visual-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 2px); }
+  40% { transform: translate(4px, -2px); }
+  60% { transform: translate(-3px, -2px); }
+  80% { transform: translate(3px, 2px); }
+}
+
+/* 事件バナー: 走路の上に赤で割り込む */
+.incident-banner {
+  position: absolute;
+  left: 50%;
+  top: 120px;
+  transform: translateX(-50%) skewX(-4deg);
+  z-index: 6;
+  padding: 8px 26px;
+  font-family: var(--font-jp);
+  font-size: 17px;
+  color: #fff;
+  background: linear-gradient(90deg, #7e1d1d, #c22626 40%, #7e1d1d);
+  border: 2px solid var(--red);
+  border-radius: var(--r-chip);
+  box-shadow: 0 0 24px rgba(255, 92, 92, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+  white-space: nowrap;
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.incident-banner.show {
+  opacity: 1;
+}
+
+/* 直撃馬の失速アニメ */
+.horse.stumble .runner-icon {
+  animation: horse-stumble 0.5s linear 3;
+}
+
+@keyframes horse-stumble {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(3px) rotate(7deg); }
+  50% { transform: translateY(-1px) rotate(-6deg); filter: grayscale(0.6); }
+  75% { transform: translateY(2px) rotate(5deg); }
 }
 
 .stadium-sky {
@@ -749,10 +872,98 @@ button:disabled {
   color: var(--text);
 }
 
+/* STAGE: オッズ掲示板と走路の横並び */
+
+.stage-grid {
+  display: grid;
+  grid-template-columns: 290px 1fr;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.odds-board {
+  align-self: start;
+  padding: 10px 12px;
+  background: #0b1520;
+  border: 2px solid #2c4258;
+  border-radius: var(--r-card);
+}
+
+.board-title {
+  margin: 0 0 8px;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--gold);
+}
+
+.board-rows {
+  display: grid;
+  gap: 4px;
+}
+
+.board-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-left: 3px solid transparent;
+  border-radius: var(--r-chip);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.board-rank {
+  width: 16px;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.board-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+}
+
+.board-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-odds {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--gold);
+}
+
+.board-row.is-lead {
+  border-left-color: var(--gold);
+  background: linear-gradient(90deg, rgba(241, 196, 83, 0.18), transparent);
+}
+
+.board-row.is-lead .board-rank,
+.board-row.is-lead .board-name {
+  color: var(--gold);
+}
+
+.track-wrap {
+  position: relative;
+  min-width: 0;
+}
+
 .track {
   position: relative;
   display: grid;
-  padding: 8px 0 14px;
+  border-radius: var(--r-card);
+  overflow: hidden;
 }
 
 .lane {
@@ -764,6 +975,11 @@ button:disabled {
 
 .lane:first-child {
   border-top: none;
+}
+
+/* 先頭レーンの金発光 */
+.lane.is-lead {
+  box-shadow: inset 0 0 18px rgba(241, 196, 83, 0.35);
 }
 
 .horse {
@@ -848,9 +1064,9 @@ button:disabled {
 
 .finish-line {
   position: absolute;
-  top: 118px;
-  bottom: 14px;
-  right: 34px;
+  top: 4px;
+  bottom: 4px;
+  right: 26px;
   width: 14px;
   background: repeating-conic-gradient(#fff 0% 25%, #111 0% 50%) 0 0 / 14px 14px;
   border: 1px solid rgba(0, 0, 0, 0.6);
@@ -868,48 +1084,59 @@ button:disabled {
   letter-spacing: 1px;
 }
 
-/* 馬券売り場 */
+/* 馬券売り場（DECK・手番スポットライト） */
 
 .selection-panel {
   display: grid;
   gap: 12px;
+  padding: 14px;
+  border: 3px solid var(--line);
+  border-radius: var(--r-card);
+  background: rgba(0, 0, 0, 0.18);
+  transition: border-color 0.25s, box-shadow 0.25s;
 }
 
-.section-heading h2 {
-  margin: 0;
-  font-size: 24px;
-  color: var(--text);
+.selection-panel.is-turn {
+  border-color: var(--turn-color, var(--gold));
+  box-shadow:
+    0 0 0 4px rgba(0, 0, 0, 0.3),
+    0 0 30px color-mix(in srgb, var(--turn-color, var(--gold)) 45%, transparent);
 }
 
 .bet-indicator {
-  min-height: 40px;
+  min-height: 56px;
+}
+
+.turn-plate {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 18px;
+  background: rgba(0, 0, 0, 0.35);
+  border-left: 8px solid var(--turn-color, var(--gold));
+  border-radius: var(--r-card);
 }
 
-.bet-turn-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  font-size: 18px;
-  background: var(--player-color);
-  color: #14120e;
-  border-radius: 4px;
-  border: 2px solid #fff;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
-  animation: badge-pulse 1s ease-in-out infinite;
+.turn-plate-eyebrow {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--turn-color, var(--gold));
 }
 
-.bet-turn-note {
+.turn-plate strong {
+  font-size: 24px;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.turn-plate-note {
+  font-size: 14px;
   color: var(--text-dim);
-  font-size: 15px;
 }
 
-.bet-done {
-  font-size: 18px;
+.turn-plate.all-in strong {
+  font-size: 20px;
   color: var(--gold);
 }
 
@@ -1124,13 +1351,11 @@ button:disabled {
   font-size: 12px;
 }
 
-.payout-table .plus,
-.winner-payouts .plus {
+.payout-table .plus {
   color: #7dedb2;
 }
 
-.payout-table .minus,
-.winner-payouts .minus {
+.payout-table .minus {
   color: var(--red);
 }
 
@@ -1221,43 +1446,138 @@ button:disabled {
   box-shadow: 0 3px 0 #7e2626;
 }
 
-/* 実況ハイライト */
+/* リボン（決着→ハイライト→払戻を1枚で連続再生） */
 
-.highlight-modal {
+.ribbon-modal {
   position: fixed;
   inset: 0;
   z-index: 60;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
   overflow-y: auto;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.78);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s;
 }
 
-.highlight-modal.show {
+.ribbon-modal.show {
   opacity: 1;
   pointer-events: auto;
 }
 
-.highlight-modal > div {
-  width: min(640px, calc(100% - 40px));
+.ribbon-box {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100% - 32px));
   margin: auto;
-  padding: 26px 30px;
-  background: linear-gradient(160deg, #16241c, var(--bg-panel) 70%);
-  border: 3px solid var(--green);
-  border-radius: 8px;
-  box-shadow: 0 0 40px rgba(54, 179, 126, 0.3);
+  padding: 24px 28px;
+  background: linear-gradient(160deg, #2b2410, var(--bg-panel) 70%);
+  border: 3px solid var(--gold);
+  border-radius: var(--r-modal);
+  box-shadow: 0 0 50px rgba(241, 196, 83, 0.3);
   animation: winner-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 
-.highlight-title {
+.ribbon-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ribbon-dots span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-jp);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.ribbon-dots span i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-panel-2);
+  border: 2px solid var(--line);
+}
+
+.ribbon-dots span.active {
+  color: var(--gold);
+}
+
+.ribbon-dots span.active i {
+  background: var(--gold);
+  border-color: #fff2cf;
+  box-shadow: 0 0 10px rgba(241, 196, 83, 0.7);
+}
+
+.ribbon-dots span.done i {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.ribbon-dots .dot-line {
+  width: 26px;
+  height: 2px;
+  background: var(--line);
+}
+
+.ribbon-body {
+  min-height: 180px;
+  max-height: 56vh;
+  overflow-y: auto;
+  margin-bottom: 18px;
+}
+
+.ribbon-winner {
   display: block;
-  font-size: 24px;
+  font-size: 34px;
+  color: var(--gold);
+  text-shadow: 2px 2px 0 #000;
+  margin: 4px 0;
+}
+
+.ribbon-sub {
+  display: block;
+  font-size: 15px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.ribbon-title {
+  display: block;
+  font-size: 22px;
   color: var(--text);
-  margin-bottom: 14px;
+  margin: 2px 0 12px;
+}
+
+.ribbon-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.ribbon-actions .sub-button {
+  flex: 0 0 auto;
+}
+
+.ribbon-actions .next-button {
+  flex: 1;
+  width: auto;
+}
+
+/* 大穴バースト用キャンバス */
+.burst-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+  display: none;
+}
+
+.burst-canvas.show {
+  display: block;
 }
 
 .highlight-styles {
@@ -1333,76 +1653,9 @@ button:disabled {
   text-align: center;
 }
 
-/* 勝者モーダル */
-
-.winner-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.72);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s;
-}
-
-.winner-modal.show {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.winner-modal > div {
-  width: min(520px, calc(100% - 40px));
-  padding: 30px 34px;
-  text-align: center;
-  background: linear-gradient(160deg, #2b2410, var(--bg-panel) 70%);
-  border: 3px solid var(--gold);
-  border-radius: 8px;
-  box-shadow: 0 0 50px rgba(241, 196, 83, 0.3);
-  animation: winner-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
-}
-
 @keyframes winner-pop {
   0% { transform: scale(0.6); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
-}
-
-.winner-modal p {
-  margin: 0 0 8px;
-  font-family: var(--font-pixel);
-  font-size: 13px;
-  color: var(--gold);
-  letter-spacing: 2px;
-}
-
-.winner-modal strong {
-  display: block;
-  font-size: 34px;
-  color: var(--gold);
-  text-shadow: 2px 2px 0 #000;
-  margin-bottom: 8px;
-}
-
-.winner-modal > div > span {
-  display: block;
-  font-size: 16px;
-  color: var(--text-dim);
-  margin-bottom: 14px;
-}
-
-.winner-payouts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.winner-payouts b {
-  font-family: var(--font-pixel);
-  font-size: 11px;
 }
 
 /* ---------- 最終結果 ---------- */
@@ -1513,7 +1766,7 @@ button:disabled {
 /* ---------- レスポンシブ ---------- */
 
 @media (max-width: 860px) {
-  .client-board,
+  .stage-grid,
   .live-panel,
   .online-columns {
     grid-template-columns: 1fr;
@@ -1534,5 +1787,32 @@ button:disabled {
 
   .runner-card strong {
     font-size: 12px;
+  }
+
+  /* 44px以上のタップ領域を確保 */
+  .bet-amounts button {
+    min-height: 44px;
+    flex: 1;
+  }
+
+  .plan-card {
+    min-height: 44px;
+  }
+
+  .race-count-buttons button {
+    min-height: 44px;
+  }
+
+  .incident-banner {
+    font-size: 14px;
+    top: 150px;
+  }
+
+  /* リボンはボトムシート化して「続ける」を親指の届く下端へ */
+  .ribbon-box {
+    margin: auto 0 0;
+    width: 100%;
+    border-radius: var(--r-modal) var(--r-modal) 0 0;
+    border-bottom: none;
   }
 }

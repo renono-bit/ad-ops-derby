@@ -5,7 +5,7 @@
 // ローカル(1画面) / オンライン(ルームID) 両対応
 // ============================================================
 
-const PLAYER_COLORS = ["#ff5c8a", "#4ba3ff", "#f1c453", "#36b37e"];
+const PLAYER_COLORS = ["#ff6ea9", "#4aa8ff", "#ffd23f", "#4fd18b"];
 const PLAYER_ICONS = ["🐴", "🦄", "🐎", "🎠"];
 const LANE_COLORS = ["#f1c453", "#4ba3ff", "#f06c9b", "#36b37e"];
 const BET_AMOUNTS = [100, 300, 500];
@@ -126,11 +126,12 @@ const els = {};
   "roundLabel", "playerBar",
   "clientName", "clientBrief", "clientIndustry", "clientKpi", "clientBudget", "clientAbsurdity",
   "raceVisual", "raceMessage", "racePhase", "raceLeader", "raceIncident",
-  "track", "betIndicator", "betAmounts", "plansGrid",
+  "oddsRows", "incidentBanner", "track", "deckPanel",
+  "betIndicator", "betAmounts", "plansGrid",
   "eventLog", "resultPanel",
   "cutIn", "cutInType", "cutInTitle", "cutInBody", "cutInContinue",
-  "highlightModal", "highlightStyles", "highlightList", "highlightClose",
-  "winnerModal", "winnerName", "winnerSummary", "winnerPayouts", "winnerClose",
+  "ribbonModal", "ribbonDots", "ribbonBody", "ribbonNext", "ribbonSecondary",
+  "burstCanvas",
   "finalStandings", "finalComment", "rematchButton", "changeMembersButton", "shareButton",
   "onlineFinalNote",
   "confetti", "muteButton",
@@ -318,20 +319,45 @@ function applyRoundSetup(setup) {
   els.clientIndustry.textContent = item.industry;
   els.clientKpi.textContent = item.kpi;
   els.clientBudget.textContent = item.budget;
-  els.clientAbsurdity.textContent = item.absurdity;
+  els.clientAbsurdity.textContent = absurdityStars(item.absurdity);
+  els.clientAbsurdity.title = `理不尽度: ${item.absurdity}`;
   els.raceMessage.textContent = "各プレイヤー、馬券をどうぞ！";
   updateRaceHud("出走前", "未確定", "まだ平和");
   els.eventLog.innerHTML = "";
   els.resultPanel.classList.add("hidden");
   els.resultPanel.innerHTML = "";
-  hideWinnerModal();
-  hideHighlights();
+  hideRibbon();
   hideCutIn();
+  renderOddsBoard(item, null);
   renderPlans(item);
   renderTrack(item);
   renderPlayerBar();
   Sound.startBgm("lobby");
   promptNextBetter();
+}
+
+function absurdityStars(level) {
+  const stars = { "低": "★★☆☆☆", "中": "★★★☆☆", "高": "★★★★☆", "極": "★★★★★" };
+  return stars[level] || level;
+}
+
+// オッズ掲示板: 出走前はゲート順、レース中は順位順に並べ替え（先頭は金発光）
+function renderOddsBoard(item, rankedOrder) {
+  const order = rankedOrder || item.plans.map((_, i) => i);
+  els.oddsRows.innerHTML = order
+    .map((planIdx, pos) => {
+      const plan = item.plans[planIdx];
+      const lead = rankedOrder && pos === 0;
+      return `
+        <div class="board-row${lead ? " is-lead" : ""}">
+          <span class="board-rank">${rankedOrder ? pos + 1 : "·"}</span>
+          <i class="board-dot" style="background:${LANE_COLORS[planIdx]}"></i>
+          <span class="board-name">${plan.horse}</span>
+          <span class="board-odds">${plan.odds.toFixed(1)}</span>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function startRound() {
@@ -358,7 +384,8 @@ let autoBetTimer = null;
 function promptNextBetter() {
   if (state.betTurn >= state.betOrder.length) {
     state.bettingOpen = false;
-    els.betIndicator.innerHTML = `<span class="bet-done">💥 全員の馬券が出揃いました。まもなく出走！</span>`;
+    els.betIndicator.innerHTML = `<div class="turn-plate all-in"><strong>💥 全員の馬券が出揃いました。まもなく出走！</strong></div>`;
+    els.deckPanel.classList.remove("is-turn");
     renderPlayerBar();
     updateBetAmountButtons(null);
     updateBetInteractivity();
@@ -383,18 +410,24 @@ function promptNextBetter() {
   }
 
   let note;
+  let eyebrow = "NOW BETTING";
   if (state.mode === "local") {
     note = `賭け金を選んで、プランをクリック！（持ち: ${formatPt(player.money)}pt）`;
   } else if (idx === state.myIndex) {
+    eyebrow = "YOUR TURN";
     note = `🫵 あなたの番です！ 賭け金を選んでプランをクリック（持ち: ${formatPt(player.money)}pt）`;
   } else {
     note = `${escapeHtml(player.name)} さんの端末で選択中…`;
   }
+  // 手番スポットライト: 馬券エリア全体を手番の色で発光させる
+  els.deckPanel.classList.add("is-turn");
+  els.deckPanel.style.setProperty("--turn-color", player.color);
   els.betIndicator.innerHTML = `
-    <span class="bet-turn-badge" style="--player-color:${player.color}">
-      ${player.icon} ${escapeHtml(player.name)} の番
-    </span>
-    <span class="bet-turn-note">${note}</span>
+    <div class="turn-plate" style="--turn-color:${player.color}">
+      <span class="turn-plate-eyebrow">${eyebrow}</span>
+      <strong>${player.icon} ${escapeHtml(player.name)} さんの番</strong>
+      <span class="turn-plate-note">${note}</span>
+    </div>
   `;
   updateBetAmountButtons(isMyTurn() ? player : null);
   updateBetInteractivity();
@@ -492,6 +525,7 @@ function renderBetChips(item) {
 
 function renderPlayerBar() {
   const activeIdx = state.bettingOpen && state.betTurn < state.betOrder.length ? currentBetterIndex() : -1;
+  els.playerBar.classList.toggle("betting", activeIdx !== -1);
   els.playerBar.innerHTML = state.players
     .map((player, i) => {
       const active = i === activeIdx ? " active" : "";
@@ -639,7 +673,7 @@ function simulateRace(item) {
           bestIndex = index;
         }
       });
-      incidents.push({ tick, slot });
+      incidents.push({ tick, slot, worst: worstDelta < -1.5 ? worstIndex : -1 });
       let impact = "";
       if (worstDelta < -1.5) {
         impact = ` 直撃したのは ${item.plans[worstIndex].horse}。`;
@@ -757,6 +791,17 @@ async function playbackRace(item, script) {
       els.raceMessage.textContent = `⚡ ${incident.type}: ${incident.title}`;
       state.incidentMessageUntil = tick + 1;
       addLog(`⚡ ${incident.type}: ${incident.title}。${incident.body}`);
+      // 事件演出: 赤バナー割り込み + 画面微振動 + 直撃馬の失速アニメ
+      els.incidentBanner.textContent = `⚡ ${incident.type}: ${incident.title}`;
+      els.incidentBanner.classList.add("show");
+      els.raceVisual.classList.add("shake");
+      setTimeout(() => els.raceVisual.classList.remove("shake"), 500);
+      setTimeout(() => els.incidentBanner.classList.remove("show"), 2600);
+      if (incidentEntry.worst >= 0) {
+        const struck = document.getElementById(`horse-${incidentEntry.worst}`);
+        struck?.classList.add("stumble");
+        setTimeout(() => struck?.classList.remove("stumble"), 1600);
+      }
       if (state.cutInEnabled) {
         renderRacePositions(item, tick);
         showCutIn(incident);
@@ -801,6 +846,12 @@ function renderRacePositions(item, tick, finalRanks = null) {
     if (label) label.textContent = `${item.plans[index].media} / KPI ${Math.round(runner.progress * 1.9)}%`;
   });
 
+  // オッズ掲示板を順位順に並べ替え + 先頭レーンを金発光
+  renderOddsBoard(item, ranked.map((r) => r.index));
+  [...els.track.children].forEach((lane, laneIdx) => {
+    lane.classList.toggle("is-lead", laneIdx === ranked[0].index);
+  });
+
   const leader = item.plans[ranked[0].index];
   updateRaceHud(null, `${leader.horse} / KPI ${Math.round(ranked[0].progress * 1.9)}%`, null);
   if (!finalRanks && tick > state.incidentMessageUntil) {
@@ -833,8 +884,8 @@ function settleRace(item, result) {
 
   [...els.track.querySelectorAll(".horse")].forEach((horse) => horse.classList.remove("running"));
   renderRacePositions(item, TOTAL_TICKS, finalRanks);
-  els.raceVisual.classList.add("flash");
-  setTimeout(() => els.raceVisual.classList.remove("flash"), 900);
+  els.raceVisual.classList.add("photo-finish");
+  setTimeout(() => els.raceVisual.classList.remove("photo-finish"), 1100);
   Sound.stopBgm();
   Sound.se.goal();
 
@@ -873,10 +924,10 @@ function settleRace(item, result) {
   renderResultPanel(item, result, payouts);
   state.running = false;
 
-  // ゴール後: まずハイライト、その後に払い戻しモーダル
+  // ゴール後: 決着→ハイライト→払戻を1枚のリボンで連続再生
   setTimeout(() => {
-    showHighlights(item, () => showWinnerModal(item, winnerPlan, winner.finalScore, payouts, anyoneWon));
-  }, 1300);
+    showRaceRibbon(item, result, payouts, anyoneWon);
+  }, 1200);
 
   // 再生中に届いていた進行メッセージを処理（ゲスト）
   if (state.queuedMsg) {
@@ -886,13 +937,8 @@ function settleRace(item, result) {
   }
 }
 
-function renderResultPanel(item, result, payouts) {
-  const isLastRound = state.round === state.deck.length - 1;
-  const controlHtml = canControlFlow()
-    ? `<button class="next-button" type="button" id="nextRoundButton">${isLastRound ? "🏆 最終結果を見る" : "▶ 次の案件へ"}</button>`
-    : `<p class="guest-wait">⏳ ホストが${isLastRound ? "最終結果" : "次の案件"}へ進めるのを待っています…</p>`;
-  els.resultPanel.innerHTML = `
-    <h3>🏁 決着: ${item.plans[result[0].index].name}</h3>
+function buildRankingHtml(item, result) {
+  return `
     <ol class="ranking">
       ${result
         .map((entry, rank) => {
@@ -909,6 +955,11 @@ function renderResultPanel(item, result, payouts) {
         })
         .join("")}
     </ol>
+  `;
+}
+
+function buildPayoutTableHtml(item, payouts) {
+  return `
     <table class="payout-table">
       <thead>
         <tr><th>プレイヤー</th><th>買い目</th><th>結果</th><th>収支</th></tr>
@@ -931,6 +982,18 @@ function renderResultPanel(item, result, payouts) {
           .join("")}
       </tbody>
     </table>
+  `;
+}
+
+function renderResultPanel(item, result, payouts) {
+  const isLastRound = state.round === state.deck.length - 1;
+  const controlHtml = canControlFlow()
+    ? `<button class="next-button" type="button" id="nextRoundButton">${isLastRound ? "🏆 最終結果を見る" : "▶ 次の案件へ"}</button>`
+    : `<p class="guest-wait">⏳ ホストが${isLastRound ? "最終結果" : "次の案件"}へ進めるのを待っています…</p>`;
+  els.resultPanel.innerHTML = `
+    <h3>🏁 決着: ${item.plans[result[0].index].name}</h3>
+    ${buildRankingHtml(item, result)}
+    ${buildPayoutTableHtml(item, payouts)}
     <div class="result-buttons">
       <button class="sub-button" type="button" id="replayHighlights">📜 ハイライトを見る</button>
       ${controlHtml}
@@ -943,7 +1006,7 @@ function renderResultPanel(item, result, payouts) {
   });
   els.resultPanel.querySelector("#replayHighlights").addEventListener("click", () => {
     Sound.se.ui();
-    showHighlights(item, null);
+    showHighlightRibbon(item);
   });
 }
 
@@ -995,19 +1058,18 @@ function waitForCutInContinue() {
   });
 }
 
-// ---------- ハイライトポップアップ ----------
+// ---------- リボン（ゴール→ハイライト→払戻を1枚で連続再生） ----------
 
-let highlightCallback = null;
+const ribbon = { steps: [], index: 0 };
 
-function showHighlights(item, onClose) {
-  highlightCallback = onClose || null;
-  els.highlightStyles.innerHTML = item.plans
+function buildHighlightStepHtml(item) {
+  const chips = item.plans
     .map((plan, index) => {
       const pattern = state.runners[index].pattern;
       return `<span class="style-chip" style="--lane-color:${LANE_COLORS[index]}">${pattern.icon} ${plan.horse}【${pattern.label}】</span>`;
     })
     .join("");
-  els.highlightList.innerHTML = state.highlights
+  const list = state.highlights
     .map((h) => `
       <li>
         <span class="hl-tick">${h.tick === TOTAL_TICKS ? "GOAL" : `第${h.tick}角`}</span>
@@ -1016,15 +1078,155 @@ function showHighlights(item, onClose) {
       </li>
     `)
     .join("");
-  els.highlightClose.textContent = onClose ? "払い戻しへ ▶" : "閉じる";
-  els.highlightModal.classList.add("show");
-  els.highlightModal.setAttribute("aria-hidden", "false");
-  els.highlightClose.focus();
+  return `
+    <p class="board-label">RACE HIGHLIGHTS</p>
+    <strong class="ribbon-title">📜 実況ハイライト</strong>
+    <div class="highlight-styles">${chips}</div>
+    <ul class="highlight-list">${list}</ul>
+  `;
 }
 
-function hideHighlights() {
-  els.highlightModal.classList.remove("show");
-  els.highlightModal.setAttribute("aria-hidden", "true");
+function showRaceRibbon(item, result, payouts, anyoneWon) {
+  const winner = result[0];
+  const winnerPlan = item.plans[winner.index];
+  const isLastRound = state.round === state.deck.length - 1;
+  const winnerOdds = winnerPlan.odds;
+
+  ribbon.steps = [
+    {
+      title: "決着",
+      html: `
+        <p class="board-label">🏆 WINNER</p>
+        <strong class="ribbon-winner">${winnerPlan.horse}</strong>
+        <span class="ribbon-sub">${winnerPlan.name} が KPI ${Math.round(winner.finalScore * 1.9)}% で優勝。</span>
+        ${buildRankingHtml(item, result)}
+      `,
+      onEnter: () => setTimeout(() => (anyoneWon ? Sound.se.win() : Sound.se.lose()), 300),
+    },
+    {
+      title: "ハイライト",
+      html: buildHighlightStepHtml(item),
+    },
+    {
+      title: "払い戻し",
+      html: `
+        <p class="board-label">PAYOUT</p>
+        <strong class="ribbon-title">💰 払い戻し</strong>
+        ${buildPayoutTableHtml(item, payouts)}
+      `,
+      onEnter: () => {
+        if (anyoneWon) {
+          // 大穴バースト: 的中オッズが高いほど紙吹雪と音を強く
+          burstGold(Math.min(320, Math.round(winnerOdds * 22) + 40));
+          if (winnerOdds >= 8) setTimeout(() => Sound.se.win(), 250);
+        }
+      },
+      primaryLabel: canControlFlow() ? (isLastRound ? "🏆 最終結果を見る" : "▶ 次の案件へ") : "閉じる",
+      primaryAction: canControlFlow() ? nextRound : null,
+      showSecondary: canControlFlow(),
+    },
+  ];
+  ribbon.index = 0;
+  renderRibbonStep();
+  els.ribbonModal.classList.add("show");
+  els.ribbonModal.setAttribute("aria-hidden", "false");
+  els.ribbonNext.focus();
+}
+
+function showHighlightRibbon(item) {
+  ribbon.steps = [
+    {
+      title: "ハイライト",
+      html: buildHighlightStepHtml(item),
+      primaryLabel: "閉じる",
+      primaryAction: null,
+      showSecondary: false,
+    },
+  ];
+  ribbon.index = 0;
+  renderRibbonStep();
+  els.ribbonModal.classList.add("show");
+  els.ribbonModal.setAttribute("aria-hidden", "false");
+  els.ribbonNext.focus();
+}
+
+function renderRibbonStep() {
+  const step = ribbon.steps[ribbon.index];
+  els.ribbonDots.innerHTML = ribbon.steps.length > 1
+    ? ribbon.steps
+        .map((s, i) => {
+          const cls = i === ribbon.index ? "active" : i < ribbon.index ? "done" : "";
+          return `<span class="${cls}"><i></i>${s.title}</span>`;
+        })
+        .join(`<b class="dot-line"></b>`)
+    : "";
+  els.ribbonBody.innerHTML = step.html;
+  els.ribbonBody.scrollTop = 0;
+  const isLast = ribbon.index === ribbon.steps.length - 1;
+  els.ribbonNext.textContent = isLast ? (step.primaryLabel || "閉じる") : "続ける ▶";
+  els.ribbonSecondary.style.display = isLast && step.showSecondary ? "" : "none";
+  if (step.onEnter) step.onEnter();
+}
+
+function hideRibbon() {
+  els.ribbonModal.classList.remove("show");
+  els.ribbonModal.setAttribute("aria-hidden", "true");
+}
+
+// ---------- 大穴バースト（金の紙吹雪） ----------
+
+let burstActive = false;
+
+function burstGold(count) {
+  const canvas = els.burstCanvas;
+  if (burstActive) return;
+  burstActive = true;
+  const ctx2d = canvas.getContext("2d");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.classList.add("show");
+  const colors = ["#f1c453", "#ffd23f", "#fff2cf", "#b8862c"];
+  const parts = Array.from({ length: count }, () => {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 4 + Math.random() * 9;
+    return {
+      x: canvas.width / 2,
+      y: canvas.height * 0.35,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 4,
+      size: 3 + Math.random() * 5,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      life: 1,
+    };
+  });
+  let frames = 0;
+  const finish = () => {
+    ctx2d.globalAlpha = 1;
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.classList.remove("show");
+    burstActive = false;
+  };
+  const safety = setTimeout(finish, 4000); // バックグラウンドタブ等でrAFが止まっても必ず終了
+  (function loop() {
+    if (!burstActive) return;
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    parts.forEach((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.16;
+      p.life -= 0.009;
+      ctx2d.globalAlpha = Math.max(0, p.life);
+      ctx2d.fillStyle = p.color;
+      ctx2d.fillRect(p.x, p.y, p.size, p.size * 0.7);
+    });
+    frames += 1;
+    if (frames < 120) {
+      requestAnimationFrame(loop);
+    } else {
+      clearTimeout(safety);
+      finish();
+    }
+  })();
 }
 
 // ---------- 最終結果 ----------
@@ -1144,30 +1346,6 @@ function stopConfetti() {
   }
   const ctx2d = els.confetti.getContext("2d");
   ctx2d.clearRect(0, 0, els.confetti.width, els.confetti.height);
-}
-
-// ---------- モーダル ----------
-
-function showWinnerModal(item, winnerPlan, finalScore, payouts, anyoneWon) {
-  els.winnerName.textContent = winnerPlan.horse;
-  els.winnerSummary.textContent = `${winnerPlan.name} が KPI ${Math.round(finalScore * 1.9)}% で優勝。`;
-  els.winnerPayouts.innerHTML = payouts
-    .map(({ bet, payout }) => {
-      const player = state.players[bet.player];
-      const net = payout - bet.amount;
-      const cls = net > 0 ? "plus" : net < 0 ? "minus" : "";
-      return `<span class="mini-chip" style="--player-color:${player.color}">${player.icon} ${escapeHtml(player.name)} <b class="${cls}">${net >= 0 ? "+" : ""}${formatPt(net)}</b></span>`;
-    })
-    .join("");
-  els.winnerModal.classList.add("show");
-  els.winnerModal.setAttribute("aria-hidden", "false");
-  els.winnerClose.focus();
-  setTimeout(() => (anyoneWon ? Sound.se.win() : Sound.se.lose()), 400);
-}
-
-function hideWinnerModal() {
-  els.winnerModal.classList.remove("show");
-  els.winnerModal.setAttribute("aria-hidden", "true");
 }
 
 // ---------- HUD / ログ ----------
@@ -1587,19 +1765,22 @@ els.betAmounts.addEventListener("click", (event) => {
   updateBetAmountButtons(player);
 });
 
-els.highlightClose.addEventListener("click", () => {
+els.ribbonNext.addEventListener("click", () => {
   Sound.se.ui();
-  hideHighlights();
-  if (highlightCallback) {
-    const callback = highlightCallback;
-    highlightCallback = null;
-    callback();
+  const isLast = ribbon.index === ribbon.steps.length - 1;
+  if (!isLast) {
+    ribbon.index += 1;
+    renderRibbonStep();
+    return;
   }
+  const step = ribbon.steps[ribbon.index];
+  hideRibbon();
+  if (step.primaryAction) step.primaryAction();
 });
 
-els.winnerClose.addEventListener("click", () => {
+els.ribbonSecondary.addEventListener("click", () => {
   Sound.se.ui();
-  hideWinnerModal();
+  hideRibbon();
 });
 
 els.rematchButton.addEventListener("click", () => {

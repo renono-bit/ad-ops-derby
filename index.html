@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./style.css" />
@@ -168,32 +168,19 @@
 
         <div id="playerBar" class="player-bar" aria-live="polite"></div>
 
-        <section class="client-board" aria-labelledby="clientName">
-          <div class="client-copy">
-            <p class="board-label">CLIENT BRIEF</p>
+        <section class="client-bar" aria-labelledby="clientName">
+          <div class="client-bar-top">
+            <span class="bar-eyebrow">CLIENT</span>
             <h2 id="clientName"></h2>
-            <p id="clientBrief"></p>
+            <span class="bar-chip">業種 <b id="clientIndustry"></b></span>
+            <span class="bar-chip">KPI <b id="clientKpi"></b></span>
+            <span class="bar-chip">予算 <b id="clientBudget"></b></span>
+            <span class="bar-chip absurd">理不尽度 <b id="clientAbsurdity"></b></span>
           </div>
-          <dl class="brief-stats">
-            <div>
-              <dt>業種</dt>
-              <dd id="clientIndustry"></dd>
-            </div>
-            <div>
-              <dt>KPI</dt>
-              <dd id="clientKpi"></dd>
-            </div>
-            <div>
-              <dt>予算</dt>
-              <dd id="clientBudget"></dd>
-            </div>
-            <div>
-              <dt>理不尽度</dt>
-              <dd id="clientAbsurdity"></dd>
-            </div>
-          </dl>
+          <p id="clientBrief" class="client-bar-brief"></p>
         </section>
 
+        <p class="layer-label">▚ STAGE — 観る</p>
         <section class="race-visual" id="raceVisual" aria-label="広告運用ダービーのレース画面">
           <div class="stadium-sky">
             <div class="billboard">KPI 達成率杯</div>
@@ -213,15 +200,21 @@
               <strong id="raceIncident">まだ平和</strong>
             </div>
           </div>
-          <div class="track" id="track"></div>
-          <div class="finish-line" aria-hidden="true"><span>GOAL</span></div>
+          <div class="stage-grid">
+            <aside class="odds-board" aria-label="オッズ掲示板">
+              <p class="board-title">ODDS BOARD</p>
+              <div id="oddsRows" class="board-rows"></div>
+            </aside>
+            <div class="track-wrap">
+              <div class="track" id="track"></div>
+              <div class="finish-line" aria-hidden="true"><span>GOAL</span></div>
+            </div>
+          </div>
+          <div id="incidentBanner" class="incident-banner" aria-hidden="true"></div>
         </section>
 
-        <section class="selection-panel">
-          <div class="section-heading">
-            <p class="board-label">BETTING TABLE</p>
-            <h2>馬券を買う</h2>
-          </div>
+        <p class="layer-label">▚ DECK — 賭ける</p>
+        <section class="selection-panel" id="deckPanel">
           <div id="betIndicator" class="bet-indicator"></div>
           <div class="bet-amounts" id="betAmounts">
             <span class="bet-amounts-label">賭け金</span>
@@ -269,25 +262,19 @@
       </div>
     </div>
 
-    <div id="highlightModal" class="highlight-modal" aria-hidden="true">
-      <div>
-        <p class="board-label">RACE HIGHLIGHTS</p>
-        <strong class="highlight-title">📜 実況ハイライト</strong>
-        <div id="highlightStyles" class="highlight-styles"></div>
-        <ul id="highlightList" class="highlight-list"></ul>
-        <button id="highlightClose" class="next-button" type="button">払い戻しへ ▶</button>
+    <!-- ゴール→ハイライト→払戻を1枚で連続再生するリボン -->
+    <div id="ribbonModal" class="ribbon-modal" aria-hidden="true">
+      <div class="ribbon-box">
+        <div id="ribbonDots" class="ribbon-dots"></div>
+        <div id="ribbonBody" class="ribbon-body"></div>
+        <div class="ribbon-actions">
+          <button id="ribbonSecondary" class="sub-button" type="button">閉じる</button>
+          <button id="ribbonNext" class="next-button" type="button">続ける ▶</button>
+        </div>
       </div>
     </div>
 
-    <div id="winnerModal" class="winner-modal" aria-hidden="true">
-      <div>
-        <p>🏆 WINNER 🏆</p>
-        <strong id="winnerName"></strong>
-        <span id="winnerSummary"></span>
-        <div id="winnerPayouts" class="winner-payouts"></div>
-        <button id="winnerClose" class="next-button" type="button">結果を見る</button>
-      </div>
-    </div>
+    <canvas id="burstCanvas" class="burst-canvas" aria-hidden="true"></canvas>
 
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="./data.js"></script>
