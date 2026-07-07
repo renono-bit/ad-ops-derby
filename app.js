@@ -2,6 +2,7 @@
 
 // ============================================================
 // 【理不尽】Web広告運用ダービー — 1〜4人対戦版
+// ローカル(1画面) / オンライン(ルームID) 両対応
 // ============================================================
 
 const PLAYER_COLORS = ["#ff5c8a", "#4ba3ff", "#f1c453", "#36b37e"];
@@ -13,6 +14,7 @@ const EMERGENCY_FUND = 500;
 const TOTAL_TICKS = 16;
 const TICK_MS = 1050;
 const INCIDENT_TICKS = [5, 9, 13];
+const MAX_PLAYERS = 4;
 
 // 展開パターン: レースごとに各馬へランダムに割り当てられ、展開が毎回変わる（全30種）
 // type: front=逃げ系 / stalker=先行系 / closer=差し・追込系 / erratic=ムラ・トラブル系
@@ -89,39 +91,48 @@ const RACE_PATTERNS = [
 ];
 
 const state = {
+  mode: "local", // "local" | "host" | "guest"
+  myIndex: 0, // オンライン時の自分のプレイヤー番号
+  roster: [], // オンライン時の参加者 [{ name, connected }]
   players: [], // { name, color, icon, money, borrowed }
   playerCount: 2,
   raceCount: 5,
   cutInEnabled: false,
   round: 0,
-  gameCases: [], // 今ゲームで出題される案件（ランダム抽選）
+  deck: [], // 今ゲームで出題される案件のインデックス列
   bets: [], // { player, plan, amount }
   betOrder: [],
   betTurn: 0,
   betAmount: 100,
   bettingOpen: false,
   running: false,
-  runners: [], // { progress, style, condition }
+  runners: [], // { progress, pattern, condition, eventTick }
   raceIncidents: [],
-  highlights: [], // { tick, icon, text }
-  lastLeader: -1,
+  highlights: [],
   incidentMessageUntil: -1,
+  queuedMsg: null, // 再生中に届いたラウンド進行メッセージの待避場所
   confettiRaf: null,
 };
 
 const els = {};
 [
-  "screen-title", "screen-setup", "screen-game", "screen-final",
-  "titleStart", "countButtons", "nameInputs", "raceCountButtons", "cutInButtons", "setupStart",
-  "cutIn", "cutInType", "cutInTitle", "cutInBody", "cutInContinue",
+  "screen-title", "screen-setup", "screen-online", "screen-game", "screen-final",
+  "titleStart", "titleOnline",
+  "countButtons", "nameInputs", "raceCountButtons", "cutInButtons", "setupStart", "setupBack",
+  "onlineEntry", "onlineName", "createRoomButton", "roomCodeInput", "joinRoomButton", "onlineError", "onlineBack",
+  "onlineLobby", "roomCodeDisplay", "copyRoomCode", "lobbyMembers",
+  "hostSettings", "onlineCutInButtons", "onlineRaceCountButtons", "onlineStartButton",
+  "guestWaitNote", "leaveRoomButton",
   "roundLabel", "playerBar",
   "clientName", "clientBrief", "clientIndustry", "clientKpi", "clientBudget", "clientAbsurdity",
   "raceVisual", "raceMessage", "racePhase", "raceLeader", "raceIncident",
   "track", "betIndicator", "betAmounts", "plansGrid",
   "eventLog", "resultPanel",
+  "cutIn", "cutInType", "cutInTitle", "cutInBody", "cutInContinue",
   "highlightModal", "highlightStyles", "highlightList", "highlightClose",
   "winnerModal", "winnerName", "winnerSummary", "winnerPayouts", "winnerClose",
   "finalStandings", "finalComment", "rematchButton", "changeMembersButton", "shareButton",
+  "onlineFinalNote",
   "confetti", "muteButton",
 ].forEach((id) => {
   els[id] = document.getElementById(id);
@@ -168,19 +179,27 @@ function weightedBase(plan) {
 }
 
 function currentCase() {
-  return state.gameCases[state.round];
+  return CASES[state.deck[state.round]];
+}
+
+function isOnline() {
+  return state.mode === "host" || state.mode === "guest";
+}
+
+function canControlFlow() {
+  return state.mode !== "guest";
 }
 
 // ---------- 画面遷移 ----------
 
 function showScreen(name) {
-  ["screen-title", "screen-setup", "screen-game", "screen-final"].forEach((id) => {
+  ["screen-title", "screen-setup", "screen-online", "screen-game", "screen-final"].forEach((id) => {
     els[id].classList.toggle("active", id === name);
   });
   window.scrollTo({ top: 0 });
 }
 
-// ---------- プレイヤー設定 ----------
+// ---------- プレイヤー設定（ローカル） ----------
 
 function renderNameInputs() {
   const previous = [...els.nameInputs.querySelectorAll("input")].map((input) => input.value);
@@ -195,10 +214,9 @@ function renderNameInputs() {
   }).join("");
 }
 
-function initPlayers() {
-  const inputs = [...els.nameInputs.querySelectorAll("input")];
-  state.players = inputs.map((input, i) => ({
-    name: input.value.trim() || `プレイヤー${i + 1}`,
+function buildPlayers(names) {
+  return names.map((name, i) => ({
+    name: name || `プレイヤー${i + 1}`,
     color: PLAYER_COLORS[i],
     icon: PLAYER_ICONS[i],
     money: START_MONEY,
@@ -206,14 +224,18 @@ function initPlayers() {
   }));
 }
 
-function startGame() {
-  state.round = 0;
-  // 案件プールより多いレース数の場合は、シャッフルを繰り返して継ぎ足す
+function buildDeck(raceCount) {
   const deck = [];
-  while (deck.length < state.raceCount) {
-    deck.push(...shuffle(CASES));
+  const indexes = CASES.map((_, i) => i);
+  while (deck.length < raceCount) {
+    deck.push(...shuffle(indexes));
   }
-  state.gameCases = deck.slice(0, state.raceCount);
+  return deck.slice(0, raceCount);
+}
+
+function startGame(deck) {
+  state.round = 0;
+  state.deck = deck;
   showScreen("screen-game");
   startRound();
 }
@@ -239,36 +261,58 @@ function pickPattern(plan) {
       break;
     }
   }
-  const candidates = RACE_PATTERNS.filter((p) => p.type === type);
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  const candidates = RACE_PATTERNS.map((p, i) => ({ p, i })).filter(({ p }) => p.type === type);
+  return candidates[Math.floor(Math.random() * candidates.length)].i;
 }
 
 // ---------- ラウンド進行 ----------
 
-function startRound() {
+// ラウンドの乱数要素をすべて生成する（ホスト/ローカルのみ実行し、ゲストへ配信する）
+function generateRoundSetup() {
+  const item = currentCase();
+  const caseIncidents = item.incidents.map((_, i) => ({ src: "case", i }));
+  const genericPicks = shuffle(GENERIC_INCIDENTS.map((_, i) => i)).slice(0, 2)
+    .map((i) => ({ src: "generic", i }));
+  const incidents = shuffle([...caseIncidents, ...genericPicks]).slice(0, 3);
+  return {
+    betOrder: state.players.map((_, i) => (i + state.round) % state.players.length),
+    runners: item.plans.map((plan) => {
+      const patternIndex = pickPattern(plan);
+      const pattern = RACE_PATTERNS[patternIndex];
+      return {
+        patternIndex,
+        condition: randomBetween(0.86, 1.18), // 当日の学習の調子
+        eventTick: pattern.event
+          ? pattern.event.ticks[Math.floor(Math.random() * pattern.event.ticks.length)]
+          : -1,
+      };
+    }),
+    incidents,
+  };
+}
+
+function resolveIncident(ref) {
+  return ref.src === "case" ? currentCase().incidents[ref.i] : GENERIC_INCIDENTS[ref.i];
+}
+
+function applyRoundSetup(setup) {
   const item = currentCase();
   state.bets = [];
   state.betTurn = 0;
   state.running = false;
   state.bettingOpen = true;
-  state.betOrder = state.players.map((_, i) => (i + state.round) % state.players.length);
-  state.runners = item.plans.map((plan) => {
-    const pattern = pickPattern(plan);
-    return {
-      progress: 0,
-      pattern,
-      condition: randomBetween(0.86, 1.18), // 当日の学習の調子
-      eventTick: pattern.event
-        ? pattern.event.ticks[Math.floor(Math.random() * pattern.event.ticks.length)]
-        : -1,
-    };
-  });
-  state.raceIncidents = shuffle([...item.incidents, ...shuffle(GENERIC_INCIDENTS).slice(0, 2)]).slice(0, 3);
+  state.betOrder = setup.betOrder;
+  state.runners = setup.runners.map((r) => ({
+    progress: 0,
+    pattern: RACE_PATTERNS[r.patternIndex],
+    condition: r.condition,
+    eventTick: r.eventTick,
+  }));
+  state.raceIncidents = setup.incidents.map(resolveIncident);
   state.highlights = [];
-  state.lastLeader = -1;
   state.incidentMessageUntil = -1;
 
-  els.roundLabel.textContent = `${state.round + 1} / ${state.gameCases.length}`;
+  els.roundLabel.textContent = `${state.round + 1} / ${state.deck.length}`;
   els.clientName.textContent = item.client;
   els.clientBrief.textContent = item.brief;
   els.clientIndustry.textContent = item.industry;
@@ -290,11 +334,26 @@ function startRound() {
   promptNextBetter();
 }
 
+function startRound() {
+  const setup = generateRoundSetup();
+  if (state.mode === "host") {
+    Net.broadcast({ t: "round", round: state.round, setup });
+  }
+  applyRoundSetup(setup);
+}
+
 // ---------- 馬券購入フェーズ ----------
 
 function currentBetterIndex() {
   return state.betOrder[state.betTurn];
 }
+
+function isMyTurn() {
+  if (!state.bettingOpen || state.betTurn >= state.betOrder.length) return false;
+  return state.mode === "local" || currentBetterIndex() === state.myIndex;
+}
+
+let autoBetTimer = null;
 
 function promptNextBetter() {
   if (state.betTurn >= state.betOrder.length) {
@@ -302,13 +361,17 @@ function promptNextBetter() {
     els.betIndicator.innerHTML = `<span class="bet-done">💥 全員の馬券が出揃いました。まもなく出走！</span>`;
     renderPlayerBar();
     updateBetAmountButtons(null);
-    setTimeout(() => beginRace(), 1200);
+    updateBetInteractivity();
+    if (canControlFlow()) {
+      setTimeout(() => beginRace(), 1200);
+    }
     return;
   }
 
   const idx = currentBetterIndex();
   const player = state.players[idx];
 
+  // 全クライアントで決定的に同じ結果になる（同じ所持金 → 同じ補填）
   if (player.money < BET_AMOUNTS[0]) {
     player.money += EMERGENCY_FUND;
     player.borrowed += EMERGENCY_FUND;
@@ -319,14 +382,39 @@ function promptNextBetter() {
     state.betAmount = [...BET_AMOUNTS].reverse().find((a) => a <= player.money) || BET_AMOUNTS[0];
   }
 
+  let note;
+  if (state.mode === "local") {
+    note = `賭け金を選んで、プランをクリック！（持ち: ${formatPt(player.money)}pt）`;
+  } else if (idx === state.myIndex) {
+    note = `🫵 あなたの番です！ 賭け金を選んでプランをクリック（持ち: ${formatPt(player.money)}pt）`;
+  } else {
+    note = `${escapeHtml(player.name)} さんの端末で選択中…`;
+  }
   els.betIndicator.innerHTML = `
     <span class="bet-turn-badge" style="--player-color:${player.color}">
       ${player.icon} ${escapeHtml(player.name)} の番
     </span>
-    <span class="bet-turn-note">賭け金を選んで、プランをクリック！（持ち: ${formatPt(player.money)}pt）</span>
+    <span class="bet-turn-note">${note}</span>
   `;
-  updateBetAmountButtons(player);
+  updateBetAmountButtons(isMyTurn() ? player : null);
+  updateBetInteractivity();
   renderPlayerBar();
+
+  // ホスト: 切断中プレイヤーの番になったら自動投票で代行
+  if (autoBetTimer) {
+    clearTimeout(autoBetTimer);
+    autoBetTimer = null;
+  }
+  if (state.mode === "host" && idx !== 0 && state.roster[idx] && !state.roster[idx].connected) {
+    autoBetTimer = setTimeout(() => {
+      if (state.bettingOpen && currentBetterIndex() === idx) {
+        const plan = Math.floor(Math.random() * currentCase().plans.length);
+        addLog(`🤖 ${player.name} は切断中のため、100pt を自動投票します。`);
+        Net.broadcast({ t: "log", text: `🤖 ${player.name} は切断中のため、100pt を自動投票します。` });
+        hostApplyBet(idx, plan, 100);
+      }
+    }, 1500);
+  }
 }
 
 function updateBetAmountButtons(player) {
@@ -337,17 +425,45 @@ function updateBetAmountButtons(player) {
   });
 }
 
+function updateBetInteractivity() {
+  const clickable = state.bettingOpen && !state.running && isMyTurn();
+  [...els.plansGrid.querySelectorAll(".plan-card")].forEach((button) => {
+    button.disabled = !clickable;
+  });
+}
+
 function placeBet(planIndex) {
-  if (!state.bettingOpen || state.running) return;
+  if (!state.bettingOpen || state.running || !isMyTurn()) return;
+  if (state.mode === "guest") {
+    Net.sendToHost({ t: "bet", plan: planIndex, amount: state.betAmount });
+    // ホストからのbetPlaced反映を待つ間、二重送信を防ぐ
+    els.betIndicator.innerHTML = `<span class="bet-turn-note">送信中…</span>`;
+    updateBetInteractivity();
+    return;
+  }
   const idx = currentBetterIndex();
-  const player = state.players[idx];
+  const amount = Math.min(state.betAmount, state.players[idx].money);
+  if (state.mode === "host") {
+    hostApplyBet(idx, planIndex, amount);
+  } else {
+    applyBet(idx, planIndex, amount);
+  }
+}
+
+// ホスト専用: 賭けを確定して全員に配信
+function hostApplyBet(playerIdx, planIndex, amount) {
+  const clamped = Math.min(amount, state.players[playerIdx].money);
+  if (clamped <= 0) return;
+  Net.broadcast({ t: "betPlaced", player: playerIdx, plan: planIndex, amount: clamped });
+  applyBet(playerIdx, planIndex, clamped);
+}
+
+function applyBet(playerIdx, planIndex, amount) {
+  const player = state.players[playerIdx];
   const item = currentCase();
   const plan = item.plans[planIndex];
-  const amount = Math.min(state.betAmount, player.money);
-  if (amount <= 0) return;
-
   player.money -= amount;
-  state.bets.push({ player: idx, plan: planIndex, amount });
+  state.bets.push({ player: playerIdx, plan: planIndex, amount });
   Sound.se.coin();
   addLog(
     `🎫 ${player.name} が ${plan.horse}（${plan.odds.toFixed(1)}倍）に ${amount}pt。的中なら ${formatPt(Math.round(amount * plan.odds))}pt！`,
@@ -379,10 +495,11 @@ function renderPlayerBar() {
   els.playerBar.innerHTML = state.players
     .map((player, i) => {
       const active = i === activeIdx ? " active" : "";
+      const you = isOnline() && i === state.myIndex ? `<small class="you-tag">あなた</small>` : "";
       return `
         <div class="player-badge${active}" style="--player-color:${player.color}">
           <span class="player-icon">${player.icon}</span>
-          <span class="player-name">${escapeHtml(player.name)}</span>
+          <span class="player-name">${escapeHtml(player.name)}${you}</span>
           <strong class="player-money">${formatPt(player.money)}<small>pt</small></strong>
         </div>
       `;
@@ -414,6 +531,7 @@ function renderPlans(item) {
       placeBet(Number(button.dataset.index));
     });
   });
+  updateBetInteractivity();
 }
 
 function renderTrack(item) {
@@ -450,16 +568,172 @@ function renderLaneChips() {
   });
 }
 
-// ---------- レース ----------
+// ---------- レースシミュレーション（DOMなし・純関数） ----------
+// レース全体を先に計算して「台本」を作る。オンライン時はホストだけが実行し
+// ゲストへ配信するため、全端末でまったく同じレースが再生される。
 
-async function beginRace() {
+function simulateRace(item) {
+  const runners = state.runners.map((r) => ({
+    progress: 0,
+    pattern: r.pattern,
+    condition: r.condition,
+    eventTick: r.eventTick,
+  }));
+  const ticks = [];
+  const incidents = []; // { tick, slot }
+  const logs = []; // { tick, text }
+  const highlights = [];
+  let lastLeader = -1;
+
+  for (let tick = 1; tick <= TOTAL_TICKS; tick += 1) {
+    // 進行
+    runners.forEach((runner, index) => {
+      const curve = runner.pattern.curve(tick);
+      const gain = (weightedBase(item.plans[index]) / TOTAL_TICKS) * curve * runner.condition * randomBetween(0.88, 1.14);
+      runner.progress += gain;
+    });
+
+    // 展開パターンの持ちネタ
+    runners.forEach((runner, index) => {
+      if (runner.eventTick !== tick) return;
+      runner.eventTick = -1;
+      const event = runner.pattern.event;
+      const delta = randomBetween(event.delta[0], event.delta[1]);
+      runner.progress = Math.max(2, runner.progress + delta);
+      const text = event.text(item.plans[index].horse);
+      highlights.push({ tick, icon: runner.pattern.icon, text });
+      logs.push({ tick, text: `${runner.pattern.icon} ${text}` });
+    });
+
+    // 理不尽ハプニング
+    const slot = INCIDENT_TICKS.indexOf(tick);
+    if (slot !== -1) {
+      const incident = state.raceIncidents[slot];
+      let worstIndex = 0;
+      let worstDelta = Infinity;
+      let bestIndex = 0;
+      let bestDelta = -Infinity;
+      runners.forEach((runner, index) => {
+        const effects = incident.effect;
+        const plan = item.plans[index];
+        const profile =
+          (effects.fit || 0) * (plan.stats.fit / 100) +
+          (effects.stability || 0) * (plan.stats.stability / 100) +
+          (effects.burst || 0) * (plan.stats.burst / 100) +
+          (effects.client || 0) * (plan.stats.client / 100);
+        let delta = profile * 0.55 + randomBetween(-2.4, 2.4);
+        const factor = runner.pattern.incidentFactor ?? 1;
+        if (factor < 0) {
+          // 逆境の鬼: マイナスをプラスに変える。プラスの追い風は半減。
+          delta = delta < 0 ? delta * factor : delta * 0.5;
+        } else {
+          delta *= factor;
+        }
+        runner.progress = Math.max(2, runner.progress + delta);
+        if (delta < worstDelta) {
+          worstDelta = delta;
+          worstIndex = index;
+        }
+        if (delta > bestDelta) {
+          bestDelta = delta;
+          bestIndex = index;
+        }
+      });
+      incidents.push({ tick, slot });
+      let impact = "";
+      if (worstDelta < -1.5) {
+        impact = ` 直撃したのは ${item.plans[worstIndex].horse}。`;
+      } else if (bestDelta > 1.5) {
+        impact = ` 追い風を受けたのは ${item.plans[bestIndex].horse}。`;
+      }
+      highlights.push({
+        tick,
+        icon: "⚡",
+        text: `${incident.type}「${incident.title}」— ${incident.body}${impact}`,
+      });
+    }
+
+    // 先頭交代
+    const leader = runners
+      .map((runner, index) => ({ progress: runner.progress, index }))
+      .sort((a, b) => b.progress - a.progress)[0].index;
+    if (lastLeader === -1) {
+      highlights.push({
+        tick,
+        icon: "🏁",
+        text: `${item.plans[leader].horse}（${runners[leader].pattern.label}）が飛び出して先頭に。`,
+      });
+    } else if (leader !== lastLeader) {
+      highlights.push({
+        tick,
+        icon: "🔄",
+        text: `${item.plans[leader].horse}（${runners[leader].pattern.label}）が ${item.plans[lastLeader].horse} をかわして先頭に立つ！`,
+      });
+      logs.push({ tick, text: `🔄 第${tick}コーナー: ${item.plans[leader].horse} が先頭を奪う！` });
+    }
+    lastLeader = leader;
+
+    ticks.push(runners.map((r) => Math.round(r.progress * 100) / 100));
+  }
+
+  // 決着
+  const result = runners
+    .map((runner, index) => {
+      const plan = item.plans[index];
+      const clientAdjustment = plan.stats.client * randomBetween(-0.02, 0.05);
+      const finalScore = Math.round((runner.progress + clientAdjustment + randomBetween(-2.5, 3.5)) * 100) / 100;
+      return { index, finalScore };
+    })
+    .sort((a, b) => b.finalScore - a.finalScore);
+
+  const winnerPattern = runners[result[0].index].pattern;
+  const winnerHorse = item.plans[result[0].index].horse;
+  if (winnerPattern.type === "front" && result[0].index === lastLeader) {
+    highlights.push({
+      tick: TOTAL_TICKS,
+      icon: "🏆",
+      text: `${winnerHorse} がそのまま押し切って1着！ 見事な逃げ切り（${winnerPattern.label}）。`,
+    });
+  } else if (winnerPattern.type === "closer") {
+    highlights.push({
+      tick: TOTAL_TICKS,
+      icon: "🏆",
+      text: `最後の直線、${winnerHorse} が一気に突き抜けて1着！ 鮮やかな${winnerPattern.label}決着。`,
+    });
+  } else if (winnerPattern.type === "erratic") {
+    highlights.push({
+      tick: TOTAL_TICKS,
+      icon: "🏆",
+      text: `波乱を呼んだ ${winnerHorse}（${winnerPattern.label}）がまさかの1着！ 誰がこの展開を読めただろうか。`,
+    });
+  } else {
+    highlights.push({
+      tick: TOTAL_TICKS,
+      icon: "🏆",
+      text: `${winnerHorse}（${winnerPattern.label}）が混戦を制して1着。着差はわずか、胃へのダメージは甚大。`,
+    });
+  }
+
+  return { ticks, incidents, logs, highlights, result };
+}
+
+// ---------- レース再生 ----------
+
+function beginRace() {
   const item = currentCase();
+  const script = simulateRace(item);
+  if (state.mode === "host") {
+    Net.broadcast({ t: "race", script });
+  }
+  playbackRace(item, script);
+}
+
+async function playbackRace(item, script) {
   state.running = true;
+  state.highlights = script.highlights;
   els.raceMessage.textContent = "ゲートイン完了。全員の胃が痛くなり始めた。";
   updateRaceHud("ゲートイン", "未確定", "まだ平和");
-  [...els.plansGrid.querySelectorAll(".plan-card")].forEach((button) => {
-    button.disabled = true;
-  });
+  updateBetInteractivity();
   renderLaneChips();
   Sound.se.gate();
   await sleep(1400);
@@ -469,13 +743,20 @@ async function beginRace() {
   for (let tick = 1; tick <= TOTAL_TICKS; tick += 1) {
     await sleep(TICK_MS);
     updateRaceHud(`第${tick}コーナー / ${TOTAL_TICKS}`, null, null);
-    advanceProgress(item, tick);
-    processPatternEvents(item, tick);
+    script.ticks[tick - 1].forEach((progress, index) => {
+      state.runners[index].progress = progress;
+    });
 
-    const incidentSlot = INCIDENT_TICKS.indexOf(tick);
-    if (incidentSlot !== -1) {
-      const incident = state.raceIncidents[incidentSlot];
-      applyIncidentLive(item, incident, tick);
+    script.logs.filter((l) => l.tick === tick).forEach((l) => addLog(l.text));
+
+    const incidentEntry = script.incidents.find((e) => e.tick === tick);
+    if (incidentEntry) {
+      const incident = state.raceIncidents[incidentEntry.slot];
+      Sound.se.alarm();
+      updateRaceHud(null, null, incident.title);
+      els.raceMessage.textContent = `⚡ ${incident.type}: ${incident.title}`;
+      state.incidentMessageUntil = tick + 1;
+      addLog(`⚡ ${incident.type}: ${incident.title}。${incident.body}`);
       if (state.cutInEnabled) {
         renderRacePositions(item, tick);
         showCutIn(incident);
@@ -485,107 +766,10 @@ async function beginRace() {
     }
 
     renderRacePositions(item, tick);
-    trackLeaderChange(item, tick);
   }
 
   await sleep(900);
-  finishRace(item);
-}
-
-function advanceProgress(item, tick) {
-  item.plans.forEach((plan, index) => {
-    const runner = state.runners[index];
-    const curve = runner.pattern.curve(tick);
-    const gain = (weightedBase(plan) / TOTAL_TICKS) * curve * runner.condition * randomBetween(0.88, 1.14);
-    runner.progress += gain;
-  });
-}
-
-// 展開パターンの持ちネタ（出遅れ・神がかり等）を発火させる
-function processPatternEvents(item, tick) {
-  state.runners.forEach((runner, index) => {
-    if (runner.eventTick !== tick) return;
-    runner.eventTick = -1;
-    const event = runner.pattern.event;
-    const delta = randomBetween(event.delta[0], event.delta[1]);
-    runner.progress = Math.max(2, runner.progress + delta);
-    const text = event.text(item.plans[index].horse);
-    state.highlights.push({ tick, icon: runner.pattern.icon, text });
-    addLog(`${runner.pattern.icon} ${text}`);
-  });
-}
-
-function applyIncidentLive(item, incident, tick) {
-  Sound.se.alarm();
-  let worstIndex = 0;
-  let worstDelta = Infinity;
-  let bestIndex = 0;
-  let bestDelta = -Infinity;
-
-  item.plans.forEach((plan, index) => {
-    const effects = incident.effect;
-    const profile =
-      (effects.fit || 0) * (plan.stats.fit / 100) +
-      (effects.stability || 0) * (plan.stats.stability / 100) +
-      (effects.burst || 0) * (plan.stats.burst / 100) +
-      (effects.client || 0) * (plan.stats.client / 100);
-    let delta = profile * 0.55 + randomBetween(-2.4, 2.4);
-    const factor = state.runners[index].pattern.incidentFactor ?? 1;
-    if (factor < 0) {
-      // 逆境の鬼: マイナスをプラスに変える。プラスの追い風は半減。
-      delta = delta < 0 ? delta * factor : delta * 0.5;
-    } else {
-      delta *= factor;
-    }
-    state.runners[index].progress = Math.max(2, state.runners[index].progress + delta);
-    if (delta < worstDelta) {
-      worstDelta = delta;
-      worstIndex = index;
-    }
-    if (delta > bestDelta) {
-      bestDelta = delta;
-      bestIndex = index;
-    }
-  });
-
-  updateRaceHud(null, null, incident.title);
-  els.raceMessage.textContent = `⚡ ${incident.type}: ${incident.title}`;
-  state.incidentMessageUntil = tick + 1;
-  addLog(`⚡ ${incident.type}: ${incident.title}。${incident.body}`);
-
-  let impact = "";
-  if (worstDelta < -1.5) {
-    impact = `直撃したのは ${item.plans[worstIndex].horse}。`;
-  } else if (bestDelta > 1.5) {
-    impact = `追い風を受けたのは ${item.plans[bestIndex].horse}。`;
-  }
-  state.highlights.push({
-    tick,
-    icon: "⚡",
-    text: `${incident.type}「${incident.title}」— ${incident.body}${impact ? " " + impact : ""}`,
-  });
-}
-
-function trackLeaderChange(item, tick) {
-  const leader = state.runners
-    .map((runner, index) => ({ progress: runner.progress, index }))
-    .sort((a, b) => b.progress - a.progress)[0].index;
-
-  if (state.lastLeader === -1) {
-    state.highlights.push({
-      tick,
-      icon: "🏁",
-      text: `${item.plans[leader].horse}（${state.runners[leader].pattern.label}）が飛び出して先頭に。`,
-    });
-  } else if (leader !== state.lastLeader) {
-    state.highlights.push({
-      tick,
-      icon: "🔄",
-      text: `${item.plans[leader].horse}（${state.runners[leader].pattern.label}）が ${item.plans[state.lastLeader].horse} をかわして先頭に立つ！`,
-    });
-    addLog(`🔄 第${tick}コーナー: ${item.plans[leader].horse} が先頭を奪う！`);
-  }
-  state.lastLeader = leader;
+  settleRace(item, script.result);
 }
 
 function renderRacePositions(item, tick, finalRanks = null) {
@@ -637,16 +821,7 @@ function getUsableDistance(horse) {
 
 // ---------- 決着と払い戻し ----------
 
-function finishRace(item) {
-  const result = state.runners
-    .map((runner, index) => {
-      const plan = item.plans[index];
-      const clientAdjustment = plan.stats.client * randomBetween(-0.02, 0.05);
-      const finalScore = runner.progress + clientAdjustment + randomBetween(-2.5, 3.5);
-      return { index, finalScore };
-    })
-    .sort((a, b) => b.finalScore - a.finalScore);
-
+function settleRace(item, result) {
   result.forEach((entry) => {
     state.runners[entry.index].progress = entry.finalScore;
   });
@@ -655,34 +830,6 @@ function finishRace(item) {
   const winner = result[0];
   const second = result[1];
   const winnerPlan = item.plans[winner.index];
-  const winnerPattern = state.runners[winner.index].pattern;
-
-  // 決着ハイライト
-  if (winnerPattern.type === "front" && winner.index === state.lastLeader) {
-    state.highlights.push({
-      tick: TOTAL_TICKS,
-      icon: "🏆",
-      text: `${winnerPlan.horse} がそのまま押し切って1着！ 見事な逃げ切り（${winnerPattern.label}）。`,
-    });
-  } else if (winnerPattern.type === "closer") {
-    state.highlights.push({
-      tick: TOTAL_TICKS,
-      icon: "🏆",
-      text: `最後の直線、${winnerPlan.horse} が一気に突き抜けて1着！ 鮮やかな${winnerPattern.label}決着。`,
-    });
-  } else if (winnerPattern.type === "erratic") {
-    state.highlights.push({
-      tick: TOTAL_TICKS,
-      icon: "🏆",
-      text: `波乱を呼んだ ${winnerPlan.horse}（${winnerPattern.label}）がまさかの1着！ 誰がこの展開を読めただろうか。`,
-    });
-  } else {
-    state.highlights.push({
-      tick: TOTAL_TICKS,
-      icon: "🏆",
-      text: `${winnerPlan.horse}（${winnerPattern.label}）が混戦を制して1着。着差はわずか、胃へのダメージは甚大。`,
-    });
-  }
 
   [...els.track.querySelectorAll(".horse")].forEach((horse) => horse.classList.remove("running"));
   renderRacePositions(item, TOTAL_TICKS, finalRanks);
@@ -694,6 +841,7 @@ function finishRace(item) {
   updateRaceHud("確定", `${winnerPlan.horse} / KPI ${Math.round(winner.finalScore * 1.9)}%`, "レース確定");
 
   // 払い戻し: 1着はオッズ×賭け金、2着は賭け金返還
+  // state.bets と result は全端末で同一のため、計算結果も全端末で一致する
   const payouts = state.bets.map((bet) => {
     const player = state.players[bet.player];
     const plan = item.plans[bet.plan];
@@ -729,10 +877,20 @@ function finishRace(item) {
   setTimeout(() => {
     showHighlights(item, () => showWinnerModal(item, winnerPlan, winner.finalScore, payouts, anyoneWon));
   }, 1300);
+
+  // 再生中に届いていた進行メッセージを処理（ゲスト）
+  if (state.queuedMsg) {
+    const msg = state.queuedMsg;
+    state.queuedMsg = null;
+    setTimeout(() => handleHostMessage(msg), 600);
+  }
 }
 
 function renderResultPanel(item, result, payouts) {
-  const isLastRound = state.round === state.gameCases.length - 1;
+  const isLastRound = state.round === state.deck.length - 1;
+  const controlHtml = canControlFlow()
+    ? `<button class="next-button" type="button" id="nextRoundButton">${isLastRound ? "🏆 最終結果を見る" : "▶ 次の案件へ"}</button>`
+    : `<p class="guest-wait">⏳ ホストが${isLastRound ? "最終結果" : "次の案件"}へ進めるのを待っています…</p>`;
   els.resultPanel.innerHTML = `
     <h3>🏁 決着: ${item.plans[result[0].index].name}</h3>
     <ol class="ranking">
@@ -775,11 +933,11 @@ function renderResultPanel(item, result, payouts) {
     </table>
     <div class="result-buttons">
       <button class="sub-button" type="button" id="replayHighlights">📜 ハイライトを見る</button>
-      <button class="next-button" type="button" id="nextRoundButton">${isLastRound ? "🏆 最終結果を見る" : "▶ 次の案件へ"}</button>
+      ${controlHtml}
     </div>
   `;
   els.resultPanel.classList.remove("hidden");
-  els.resultPanel.querySelector("#nextRoundButton").addEventListener("click", () => {
+  els.resultPanel.querySelector("#nextRoundButton")?.addEventListener("click", () => {
     Sound.se.ui();
     nextRound();
   });
@@ -791,7 +949,8 @@ function renderResultPanel(item, result, payouts) {
 
 function nextRound() {
   state.round += 1;
-  if (state.round >= state.gameCases.length) {
+  if (state.round >= state.deck.length) {
+    if (state.mode === "host") Net.broadcast({ t: "final" });
     showFinal();
   } else {
     startRound();
@@ -908,6 +1067,11 @@ function showFinal() {
   els.shareButton.href =
     `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${shareText} #広告運用ダービー`)}&url=${encodeURIComponent(location.href.split("#")[0])}`;
 
+  // オンライン時: 再戦はホストのみ操作可能
+  els.rematchButton.style.display = canControlFlow() ? "" : "none";
+  els.onlineFinalNote.classList.toggle("hidden", canControlFlow());
+  els.changeMembersButton.textContent = isOnline() ? "🚪 退出してタイトルへ" : "👥 メンバーを変える";
+
   Sound.se.win();
   setTimeout(() => Sound.startBgm("final"), 1600);
   startConfetti();
@@ -919,7 +1083,11 @@ function rematch() {
     player.money = START_MONEY;
     player.borrowed = 0;
   });
-  startGame();
+  const deck = buildDeck(state.raceCount);
+  if (state.mode === "host") {
+    Net.broadcast({ t: "rematch", deck });
+  }
+  startGame(deck);
 }
 
 // ---------- 紙吹雪 ----------
@@ -1020,10 +1188,293 @@ function addLog(message, color = null) {
   }
 }
 
+// ============================================================
+// オンライン対戦（ルームID方式）
+// ============================================================
+
+function renderLobby() {
+  els.lobbyMembers.innerHTML = state.roster
+    .map((member, i) => {
+      const host = i === 0 ? `<small class="host-tag">ホスト</small>` : "";
+      const you = i === state.myIndex ? `<small class="you-tag">あなた</small>` : "";
+      const off = member.connected ? "" : "（切断）";
+      return `
+        <div class="player-badge" style="--player-color:${PLAYER_COLORS[i]}">
+          <span class="player-icon">${PLAYER_ICONS[i]}</span>
+          <span class="player-name">${escapeHtml(member.name)}${off}${host}${you}</span>
+        </div>
+      `;
+    })
+    .join("");
+  if (state.mode === "host") {
+    els.onlineStartButton.disabled = state.roster.length < 1;
+  }
+}
+
+function showOnlineError(message) {
+  els.onlineError.textContent = message || "";
+}
+
+function enterLobby(code) {
+  els.onlineEntry.classList.add("hidden");
+  els.onlineLobby.classList.remove("hidden");
+  els.roomCodeDisplay.textContent = code;
+  els.hostSettings.classList.toggle("hidden", state.mode !== "host");
+  els.guestWaitNote.classList.toggle("hidden", state.mode !== "guest");
+  renderLobby();
+}
+
+function leaveRoom() {
+  Net.destroy();
+  stopConfetti();
+  state.mode = "local";
+  state.myIndex = 0;
+  state.roster = [];
+  state.queuedMsg = null;
+  els.onlineEntry.classList.remove("hidden");
+  els.onlineLobby.classList.add("hidden");
+  showOnlineError("");
+  showScreen("screen-title");
+}
+
+function myName() {
+  return els.onlineName.value.trim() || (state.mode === "host" ? "ホスト" : "ゲスト");
+}
+
+// --- ホスト側 ---
+
+const guestConns = new Map(); // conn -> playerIndex
+
+async function hostCreateRoom() {
+  showOnlineError("");
+  els.createRoomButton.disabled = true;
+  els.createRoomButton.textContent = "作成中…";
+  try {
+    const code = await Net.createRoom();
+    state.mode = "host";
+    state.myIndex = 0;
+    state.roster = [{ name: myName(), connected: true }];
+    enterLobby(code);
+  } catch (err) {
+    showOnlineError(`⚠ ${err.message}`);
+  } finally {
+    els.createRoomButton.disabled = false;
+    els.createRoomButton.textContent = "🏠 部屋を作る";
+  }
+}
+
+function hostGameStarted() {
+  return state.deck.length > 0;
+}
+
+Net.handlers.onGuestOpen = (conn) => {
+  // 名前は join メッセージで届く。ここでは接続のみ受け付ける。
+  setTimeout(() => {
+    // 5秒以内にjoinが来なければ無視（不正接続対策）
+    if (!guestConns.has(conn)) {
+      try { conn.close(); } catch (e) { /* 無視 */ }
+    }
+  }, 5000);
+};
+
+Net.handlers.onGuestData = (conn, msg) => {
+  if (!msg || typeof msg !== "object") return;
+  if (msg.t === "join") {
+    if (hostGameStarted()) {
+      Net.sendTo(conn, { t: "reject", reason: "ゲームが既に始まっています。" });
+      return;
+    }
+    if (state.roster.length >= MAX_PLAYERS) {
+      Net.sendTo(conn, { t: "reject", reason: "この部屋は満員です（最大4人）。" });
+      return;
+    }
+    const index = state.roster.length;
+    const name = String(msg.name || "").slice(0, 8) || `ゲスト${index}`;
+    state.roster.push({ name, connected: true });
+    guestConns.set(conn, index);
+    Net.sendTo(conn, { t: "welcome", yourIndex: index, roster: state.roster.map((r) => r.name) });
+    Net.broadcast({ t: "roster", roster: state.roster.map((r) => ({ name: r.name, connected: r.connected })) });
+    renderLobby();
+    Sound.se.coin();
+    return;
+  }
+  if (msg.t === "bet") {
+    const playerIdx = guestConns.get(conn);
+    if (playerIdx === undefined) return;
+    if (!state.bettingOpen || currentBetterIndex() !== playerIdx) return; // 手番外の投票は無視
+    const plan = Number(msg.plan);
+    const amount = Number(msg.amount);
+    if (!Number.isInteger(plan) || plan < 0 || plan >= currentCase().plans.length) return;
+    if (!BET_AMOUNTS.includes(amount)) return;
+    hostApplyBet(playerIdx, plan, amount);
+  }
+};
+
+Net.handlers.onGuestLeave = (conn) => {
+  const playerIdx = guestConns.get(conn);
+  if (playerIdx === undefined) return;
+  guestConns.delete(conn);
+  if (!hostGameStarted()) {
+    // ロビー中は名簿から削除して詰める
+    state.roster.splice(playerIdx, 1);
+    // インデックスの振り直し
+    const entries = [...guestConns.entries()].sort((a, b) => a[1] - b[1]);
+    guestConns.clear();
+    entries.forEach(([c], i) => guestConns.set(c, i + 1));
+    Net.broadcast({ t: "roster", roster: state.roster.map((r) => ({ name: r.name, connected: r.connected })) });
+    guestConns.forEach((idx, c) => Net.sendTo(c, { t: "reindex", yourIndex: idx }));
+    renderLobby();
+    return;
+  }
+  // ゲーム中は切断マークを付けて自動投票で継続
+  state.roster[playerIdx].connected = false;
+  addLog(`📡 ${state.players[playerIdx]?.name || "プレイヤー"} との接続が切れました。以降は自動投票で継続します。`);
+  Net.broadcast({ t: "log", text: `📡 ${state.players[playerIdx]?.name || "プレイヤー"} との接続が切れました。` });
+  if (state.bettingOpen && currentBetterIndex() === playerIdx) {
+    promptNextBetter(); // 自動投票タイマーを起動し直す
+  }
+};
+
+function hostStartGame() {
+  if (state.roster.length < 1) return;
+  const names = state.roster.map((r) => r.name);
+  state.players = buildPlayers(names);
+  const deck = buildDeck(state.raceCount);
+  Net.broadcast({
+    t: "start",
+    deck,
+    raceCount: state.raceCount,
+    cutInEnabled: state.cutInEnabled,
+    roster: names,
+  });
+  startGame(deck);
+}
+
+// --- ゲスト側 ---
+
+async function guestJoinRoom() {
+  const code = els.roomCodeInput.value.trim().toUpperCase();
+  if (code.length !== 4) {
+    showOnlineError("⚠ ルームIDは4文字です。");
+    return;
+  }
+  showOnlineError("");
+  els.joinRoomButton.disabled = true;
+  els.joinRoomButton.textContent = "接続中…";
+  try {
+    await Net.joinRoom(code);
+    state.mode = "guest";
+    Net.sendToHost({ t: "join", name: myName() });
+    enterLobby(code);
+  } catch (err) {
+    showOnlineError(`⚠ ${err.message}`);
+  } finally {
+    els.joinRoomButton.disabled = false;
+    els.joinRoomButton.textContent = "🚪 入室する";
+  }
+}
+
+function handleHostMessage(msg) {
+  if (!msg || typeof msg !== "object") return;
+  // レース再生中に進行系メッセージが届いたら、再生完了後に処理する
+  if (state.running && ["round", "final", "rematch"].includes(msg.t)) {
+    state.queuedMsg = msg;
+    return;
+  }
+  switch (msg.t) {
+    case "welcome":
+      state.myIndex = msg.yourIndex;
+      state.roster = msg.roster.map((name) => ({ name, connected: true }));
+      renderLobby();
+      Sound.se.coin();
+      break;
+    case "reindex":
+      state.myIndex = msg.yourIndex;
+      renderLobby();
+      break;
+    case "roster":
+      state.roster = msg.roster.map((r) => ({ name: r.name, connected: r.connected }));
+      renderLobby();
+      break;
+    case "reject":
+      Net.destroy();
+      state.mode = "local";
+      els.onlineEntry.classList.remove("hidden");
+      els.onlineLobby.classList.add("hidden");
+      showOnlineError(`⚠ ${msg.reason}`);
+      break;
+    case "start":
+      state.raceCount = msg.raceCount;
+      state.cutInEnabled = msg.cutInEnabled;
+      state.players = buildPlayers(msg.roster);
+      state.round = 0;
+      state.deck = msg.deck;
+      showScreen("screen-game");
+      break;
+    case "round":
+      state.round = msg.round;
+      applyRoundSetup(msg.setup);
+      break;
+    case "betPlaced":
+      applyBet(msg.player, msg.plan, msg.amount);
+      break;
+    case "race":
+      playbackRace(currentCase(), msg.script);
+      break;
+    case "final":
+      showFinal();
+      break;
+    case "rematch":
+      stopConfetti();
+      state.players.forEach((player) => {
+        player.money = START_MONEY;
+        player.borrowed = 0;
+      });
+      state.round = 0;
+      state.deck = msg.deck;
+      showScreen("screen-game");
+      break;
+    case "log":
+      addLog(msg.text);
+      break;
+    default:
+      break;
+  }
+}
+
+Net.handlers.onHostData = handleHostMessage;
+
+Net.handlers.onHostLost = () => {
+  // ホスト消失: カットインの器を借りて通知し、タイトルへ戻す
+  els.cutInType.textContent = "通信エラー";
+  els.cutInTitle.textContent = "ホストとの接続が切れました";
+  els.cutInBody.textContent = "レースは中止です。広告運用と同じで、インフラには逆らえません。";
+  els.cutIn.classList.add("show");
+  els.cutIn.setAttribute("aria-hidden", "false");
+  els.cutInContinue.disabled = false;
+  els.cutInContinue.onclick = () => {
+    els.cutInContinue.onclick = null;
+    hideCutIn();
+    leaveRoom();
+  };
+};
+
 // ---------- イベント配線 ----------
 
 function updateMuteButton() {
   els.muteButton.textContent = Sound.isMuted() ? "🔇" : "🔊";
+}
+
+function wireToggleGroup(container, dataKey, apply) {
+  container.addEventListener("click", (event) => {
+    const button = event.target.closest(`button[data-${dataKey}]`);
+    if (!button || button.disabled) return;
+    Sound.se.ui();
+    apply(button.dataset[dataKey === "cutin" ? "cutin" : dataKey]);
+    [...container.querySelectorAll("button")].forEach((b) => {
+      b.classList.toggle("selected", b === button);
+    });
+  });
 }
 
 els.muteButton.addEventListener("click", () => {
@@ -1036,8 +1487,16 @@ els.titleStart.addEventListener("click", () => {
   Sound.ensure();
   Sound.se.ui();
   Sound.startBgm("lobby");
+  state.mode = "local";
   renderNameInputs();
   showScreen("screen-setup");
+});
+
+els.titleOnline.addEventListener("click", () => {
+  Sound.ensure();
+  Sound.se.ui();
+  Sound.startBgm("lobby");
+  showScreen("screen-online");
 });
 
 els.countButtons.addEventListener("click", (event) => {
@@ -1051,30 +1510,72 @@ els.countButtons.addEventListener("click", (event) => {
   renderNameInputs();
 });
 
-els.cutInButtons.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-cutin]");
-  if (!button) return;
-  Sound.se.ui();
-  state.cutInEnabled = button.dataset.cutin === "on";
-  [...els.cutInButtons.querySelectorAll("button")].forEach((b) => {
-    b.classList.toggle("selected", b === button);
-  });
+wireToggleGroup(els.cutInButtons, "cutin", (v) => {
+  state.cutInEnabled = v === "on";
 });
-
-els.raceCountButtons.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-races]");
-  if (!button) return;
-  Sound.se.ui();
-  state.raceCount = Number(button.dataset.races);
-  [...els.raceCountButtons.querySelectorAll("button")].forEach((b) => {
-    b.classList.toggle("selected", b === button);
-  });
+wireToggleGroup(els.raceCountButtons, "races", (v) => {
+  state.raceCount = Number(v);
+});
+wireToggleGroup(els.onlineCutInButtons, "cutin", (v) => {
+  state.cutInEnabled = v === "on";
+});
+wireToggleGroup(els.onlineRaceCountButtons, "races", (v) => {
+  state.raceCount = Number(v);
 });
 
 els.setupStart.addEventListener("click", () => {
   Sound.se.coin();
-  initPlayers();
-  startGame();
+  state.mode = "local";
+  const inputs = [...els.nameInputs.querySelectorAll("input")];
+  state.players = buildPlayers(inputs.map((input) => input.value.trim()));
+  startGame(buildDeck(state.raceCount));
+});
+
+els.setupBack.addEventListener("click", () => {
+  Sound.se.ui();
+  showScreen("screen-title");
+});
+
+els.createRoomButton.addEventListener("click", () => {
+  Sound.se.ui();
+  hostCreateRoom();
+});
+
+els.joinRoomButton.addEventListener("click", () => {
+  Sound.se.ui();
+  guestJoinRoom();
+});
+
+els.roomCodeInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") guestJoinRoom();
+});
+
+els.copyRoomCode.addEventListener("click", async () => {
+  Sound.se.ui();
+  try {
+    await navigator.clipboard.writeText(els.roomCodeDisplay.textContent);
+    els.copyRoomCode.textContent = "✅ コピーしました";
+    setTimeout(() => {
+      els.copyRoomCode.textContent = "📋 コピー";
+    }, 1500);
+  } catch (e) {
+    /* クリップボード非対応環境は無視 */
+  }
+});
+
+els.onlineStartButton.addEventListener("click", () => {
+  Sound.se.coin();
+  hostStartGame();
+});
+
+els.leaveRoomButton.addEventListener("click", () => {
+  Sound.se.ui();
+  leaveRoom();
+});
+
+els.onlineBack.addEventListener("click", () => {
+  Sound.se.ui();
+  leaveRoom();
 });
 
 els.betAmounts.addEventListener("click", (event) => {
@@ -1082,9 +1583,7 @@ els.betAmounts.addEventListener("click", (event) => {
   if (!button || button.disabled) return;
   Sound.se.ui();
   state.betAmount = Number(button.dataset.amount);
-  const player = state.bettingOpen && state.betTurn < state.betOrder.length
-    ? state.players[currentBetterIndex()]
-    : null;
+  const player = isMyTurn() ? state.players[currentBetterIndex()] : null;
   updateBetAmountButtons(player);
 });
 
@@ -1110,6 +1609,10 @@ els.rematchButton.addEventListener("click", () => {
 
 els.changeMembersButton.addEventListener("click", () => {
   Sound.se.ui();
+  if (isOnline()) {
+    leaveRoom();
+    return;
+  }
   stopConfetti();
   Sound.startBgm("lobby");
   renderNameInputs();
@@ -1123,6 +1626,10 @@ window.addEventListener("resize", () => {
   if (els["screen-game"].classList.contains("active") && state.running && state.runners.length) {
     renderRacePositions(currentCase(), TOTAL_TICKS / 2);
   }
+});
+
+window.addEventListener("beforeunload", () => {
+  Net.destroy();
 });
 
 // ---------- 初期化 ----------

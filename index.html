@@ -32,10 +32,13 @@
         <div class="title-horses" aria-hidden="true">
           <span>🏇</span><span>🏇</span><span>🏇</span><span>🏇</span>
         </div>
-        <button id="titleStart" class="big-button" type="button">▶ ゲームスタート</button>
+        <div class="title-buttons">
+          <button id="titleStart" class="big-button" type="button">▶ みんなで1画面プレイ</button>
+          <button id="titleOnline" class="big-button online-button" type="button">🌐 オンライン対戦（ルームID）</button>
+        </div>
         <ul class="title-notes">
-          <li>🎮 1〜4人で遊べます（1台の画面をみんなで囲むか、画面共有でどうぞ）</li>
-          <li>💰 運用プランに持ちポイントを賭けて、5案件の合計で勝負</li>
+          <li>🎮 1〜4人で遊べます（1台の画面をみんなで囲む / ルームIDで各自の端末から）</li>
+          <li>💰 運用プランに持ちポイントを賭けて、全レースの合計で勝負</li>
           <li>🔊 音が出ます（右上のボタンでミュートできます）</li>
         </ul>
       </div>
@@ -82,6 +85,70 @@
           </ul>
         </div>
         <button id="setupStart" class="big-button" type="button">🏁 出走！</button>
+        <button id="setupBack" class="sub-button back-button" type="button">← タイトルへ戻る</button>
+      </div>
+    </section>
+
+    <!-- ============ オンライン対戦ロビー ============ -->
+    <section id="screen-online" class="screen setup-screen">
+      <div class="setup-inner">
+        <p class="board-label">ONLINE</p>
+        <h2>オンライン対戦</h2>
+        <div id="onlineEntry">
+          <p class="setup-note">ルームIDを共有するだけで、各自の端末から同じレースに参加できます。</p>
+          <label class="name-input online-name" style="--player-color:#f1c453">
+            <span>👤 あなたの名前</span>
+            <input id="onlineName" type="text" maxlength="8" placeholder="なまえ" />
+          </label>
+          <div class="online-columns">
+            <div class="online-card">
+              <h3>🏠 部屋を作る</h3>
+              <p>ルームIDが発行されます。参加者に共有してください。あなたがホスト（進行役）になります。</p>
+              <button id="createRoomButton" class="big-button online-action" type="button">🏠 部屋を作る</button>
+            </div>
+            <div class="online-card">
+              <h3>🚪 部屋に入る</h3>
+              <p>ホストから共有されたルームID（4文字）を入力してください。</p>
+              <input id="roomCodeInput" class="room-code-input" type="text" maxlength="4" placeholder="例: 3F8K" autocapitalize="characters" autocomplete="off" />
+              <button id="joinRoomButton" class="big-button online-action" type="button">🚪 入室する</button>
+            </div>
+          </div>
+          <p id="onlineError" class="online-error" role="alert"></p>
+          <p class="online-caveat">※ 通信はP2P（WebRTC）です。会社のネットワークやVPNでは接続できない場合があります。</p>
+          <button id="onlineBack" class="sub-button back-button" type="button">← タイトルへ戻る</button>
+        </div>
+        <div id="onlineLobby" class="hidden">
+          <div class="room-code-box">
+            <span>ルームID</span>
+            <strong id="roomCodeDisplay"></strong>
+            <button id="copyRoomCode" class="sub-button" type="button">📋 コピー</button>
+          </div>
+          <p class="setup-note">メンバー（最大4人）</p>
+          <div id="lobbyMembers" class="lobby-members"></div>
+          <div id="hostSettings">
+            <p class="setup-note">ハプニング演出を選んでください。</p>
+            <div class="count-buttons" id="onlineCutInButtons">
+              <button type="button" data-cutin="off" class="selected">ノンストップ実況</button>
+              <button type="button" data-cutin="on">カットインで一時停止</button>
+            </div>
+            <p class="setup-note">レース数（案件数）を選んでください。</p>
+            <div class="race-count-buttons" id="onlineRaceCountButtons">
+              <button type="button" data-races="1">1</button>
+              <button type="button" data-races="2">2</button>
+              <button type="button" data-races="3">3</button>
+              <button type="button" data-races="4">4</button>
+              <button type="button" data-races="5" class="selected">5</button>
+              <button type="button" data-races="6">6</button>
+              <button type="button" data-races="7">7</button>
+              <button type="button" data-races="8">8</button>
+              <button type="button" data-races="9">9</button>
+              <button type="button" data-races="10">10</button>
+            </div>
+            <button id="onlineStartButton" class="big-button" type="button">🏁 全員そろったら出走！</button>
+          </div>
+          <p id="guestWaitNote" class="setup-note hidden">⏳ ホストがレースを開始するのを待っています…</p>
+          <button id="leaveRoomButton" class="sub-button back-button" type="button">🚪 退出する</button>
+        </div>
       </div>
     </section>
 
@@ -185,6 +252,7 @@
         <p id="finalComment" class="final-comment"></p>
         <div class="final-buttons">
           <button id="rematchButton" class="big-button" type="button">🔁 同じメンバーでもう一度</button>
+          <p id="onlineFinalNote" class="setup-note hidden">⏳ ホストが再戦を開始すると自動で始まります</p>
           <button id="changeMembersButton" class="sub-button" type="button">👥 メンバーを変える</button>
           <a id="shareButton" class="sub-button share-button" href="#" target="_blank" rel="noopener">𝕏 結果をシェア</a>
         </div>
@@ -221,8 +289,10 @@
       </div>
     </div>
 
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="./data.js"></script>
     <script src="./audio.js"></script>
+    <script src="./net.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
