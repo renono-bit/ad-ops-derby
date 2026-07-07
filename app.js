@@ -14,29 +14,79 @@ const TOTAL_TICKS = 16;
 const TICK_MS = 1050;
 const INCIDENT_TICKS = [5, 9, 13];
 
-// 脚質: レースごとに各馬へランダムに割り当てられ、展開が毎回変わる
-const RUN_STYLES = {
-  nige: {
-    label: "逃げ",
-    icon: "💨",
-    curve: (t) => (t <= 6 ? 1.3 : t <= 11 ? 0.97 : 0.76),
-  },
-  senko: {
-    label: "先行",
-    icon: "🚶",
-    curve: (t) => (t <= 6 ? 1.12 : 0.99),
-  },
-  sashi: {
-    label: "差し",
-    icon: "⚡",
-    curve: (t) => (t <= 8 ? 0.82 : 1.28),
-  },
-  oikomi: {
-    label: "追込",
-    icon: "🚀",
-    curve: (t) => (t <= 10 ? 0.71 : 1.62),
-  },
-};
+// 展開パターン: レースごとに各馬へランダムに割り当てられ、展開が毎回変わる（全30種）
+// type: front=逃げ系 / stalker=先行系 / closer=差し・追込系 / erratic=ムラ・トラブル系
+// curve は各コーナーでの伸び倍率。incidentFactor はハプニングの影響倍率。
+// event は1レースに1回だけ起こる持ちネタ（発生コーナーは毎回抽選）。
+const RACE_PATTERNS = [
+  // --- 逃げ系 ---
+  { label: "大逃げ", icon: "💨", type: "front",
+    curve: (t) => (t <= 5 ? 1.62 : t <= 10 ? 1.0 : 0.58) },
+  { label: "しぶとい逃げ", icon: "🛡️", type: "front", incidentFactor: 0.7,
+    curve: (t) => (t <= 6 ? 1.3 : 0.88) },
+  { label: "ジェットスタート", icon: "🚀", type: "front",
+    curve: (t) => (t <= 2 ? 1.95 : t <= 10 ? 1.0 : 0.78) },
+  { label: "ハナ争い", icon: "🔥", type: "front",
+    curve: (t) => (t <= 4 ? 1.48 : 0.9) },
+  { label: "掛かり気味", icon: "😤", type: "front",
+    curve: (t) => (t <= 5 ? 1.58 : t <= 9 ? 0.95 : 0.62) },
+  { label: "マイペース逃げ", icon: "🎈", type: "front",
+    curve: (t) => (t <= 8 ? 1.18 : 0.86) },
+  // --- 先行系 ---
+  { label: "好位抜け出し", icon: "🎯", type: "stalker",
+    curve: (t) => (t <= 8 ? 1.02 : t <= 13 ? 1.12 : 0.95) },
+  { label: "マイペース先行", icon: "🚶", type: "stalker",
+    curve: () => 1.02 },
+  { label: "粘り腰", icon: "🪨", type: "stalker", incidentFactor: 0.5,
+    curve: () => 1.0 },
+  { label: "尻上がり", icon: "📈", type: "stalker",
+    curve: (t) => 0.78 + t * 0.03 },
+  { label: "竜頭蛇尾", icon: "📉", type: "stalker",
+    curve: (t) => 1.32 - t * 0.038 },
+  { label: "中だるみ", icon: "😪", type: "stalker",
+    curve: (t) => (t >= 7 && t <= 10 ? 0.6 : 1.16) },
+  { label: "鋼メンタル", icon: "🧠", type: "stalker", incidentFactor: 0.3,
+    curve: () => 1.0 },
+  { label: "神がかり", icon: "✨", type: "stalker",
+    curve: () => 0.97,
+    event: { ticks: [6, 8, 10, 12], delta: [3, 6], text: (h) => `${h}に謎の追い風！ 何かが噛み合っている。` } },
+  // --- 差し・追込系 ---
+  { label: "直線一気", icon: "⚡", type: "closer",
+    curve: (t) => (t <= 12 ? 0.82 : 1.7) },
+  { label: "大外一気", icon: "🌪️", type: "closer",
+    curve: (t) => (t <= 11 ? 0.85 : 1.45) },
+  { label: "二の脚", icon: "🦵", type: "closer",
+    curve: (t) => ((t >= 6 && t <= 8) || t >= 13 ? 1.35 : 0.8) },
+  { label: "じわじわ差し", icon: "🐢", type: "closer",
+    curve: (t) => (t <= 8 ? 0.9 : 1.18) },
+  { label: "ため差し", icon: "⏳", type: "closer",
+    curve: (t) => (t <= 9 ? 0.86 : 1.28) },
+  { label: "最後方一気", icon: "🎇", type: "closer",
+    curve: (t) => (t <= 13 ? 0.78 : 2.05) },
+  { label: "エンジン遅れ", icon: "🔧", type: "closer",
+    curve: (t) => (t <= 4 ? 0.6 : t <= 10 ? 1.05 : 1.28) },
+  { label: "スロースターター", icon: "🐌", type: "closer",
+    curve: (t) => Math.min(0.6 + t * 0.05, 1.3) },
+  { label: "ワイヤ際の魔術師", icon: "🎩", type: "closer",
+    curve: (t) => (t <= 14 ? 0.93 : 1.8) },
+  { label: "逆境の鬼", icon: "👹", type: "closer", incidentFactor: -0.6,
+    curve: (t) => (t <= 10 ? 0.94 : 1.2) },
+  // --- ムラ・トラブル系 ---
+  { label: "出遅れ", icon: "😱", type: "erratic",
+    curve: (t) => (t <= 2 ? 0.15 : 1.18),
+    event: { ticks: [1], delta: [0, 0], text: (h) => `${h}、痛恨の出遅れ！ ゲートで立ち上がってしまった。` } },
+  { label: "ムラ馬", icon: "🎲", type: "erratic",
+    curve: () => randomBetween(0.55, 1.5) },
+  { label: "気分屋", icon: "🌗", type: "erratic",
+    curve: (t) => (t % 4 < 2 ? 1.28 : 0.78) },
+  { label: "ガス欠", icon: "⛽", type: "erratic",
+    curve: (t) => (t <= 12 ? 1.14 : 0.55) },
+  { label: "ガラスの脚", icon: "🥀", type: "erratic", incidentFactor: 1.9,
+    curve: () => 1.04 },
+  { label: "事故体質", icon: "🌩️", type: "erratic",
+    curve: () => 1.06,
+    event: { ticks: [3, 5, 7, 9, 11], delta: [-6, -3], text: (h) => `${h}に不運が直撃！ 進行がもたつく。` } },
+];
 
 const state = {
   players: [], // { name, color, icon, money, borrowed }
@@ -166,16 +216,29 @@ function startGame() {
   startRound();
 }
 
-// ---------- 脚質割り当て ----------
+// ---------- 展開パターン割り当て ----------
 
-function pickStyle(plan) {
+function pickPattern(plan) {
   const { stability, burst } = plan.stats;
-  const pool = [];
-  pool.push(...Array(Math.max(1, Math.round(stability / 22))).fill("senko"));
-  pool.push(...Array(Math.max(1, Math.round(stability / 30))).fill("nige"));
-  pool.push(...Array(Math.max(1, Math.round(burst / 22))).fill("sashi"));
-  pool.push(...Array(Math.max(1, Math.round(burst / 28))).fill("oikomi"));
-  return pool[Math.floor(Math.random() * pool.length)];
+  // 安定型は逃げ/先行、爆発型は差し/追込に寄りやすい。ムラ系は誰にでも起こる。
+  const weights = {
+    front: stability * 0.6 + 15,
+    stalker: stability * 0.9 + 15,
+    closer: burst * 0.9 + 15,
+    erratic: 42,
+  };
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  let roll = Math.random() * total;
+  let type = "stalker";
+  for (const [key, weight] of Object.entries(weights)) {
+    roll -= weight;
+    if (roll <= 0) {
+      type = key;
+      break;
+    }
+  }
+  const candidates = RACE_PATTERNS.filter((p) => p.type === type);
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 // ---------- ラウンド進行 ----------
@@ -187,11 +250,17 @@ function startRound() {
   state.running = false;
   state.bettingOpen = true;
   state.betOrder = state.players.map((_, i) => (i + state.round) % state.players.length);
-  state.runners = item.plans.map((plan) => ({
-    progress: 0,
-    style: pickStyle(plan),
-    condition: randomBetween(0.86, 1.18), // 当日の学習の調子
-  }));
+  state.runners = item.plans.map((plan) => {
+    const pattern = pickPattern(plan);
+    return {
+      progress: 0,
+      pattern,
+      condition: randomBetween(0.86, 1.18), // 当日の学習の調子
+      eventTick: pattern.event
+        ? pattern.event.ticks[Math.floor(Math.random() * pattern.event.ticks.length)]
+        : -1,
+    };
+  });
   state.raceIncidents = shuffle([...item.incidents, ...shuffle(GENERIC_INCIDENTS).slice(0, 2)]).slice(0, 3);
   state.highlights = [];
   state.lastLeader = -1;
@@ -405,6 +474,7 @@ async function beginRace() {
     await sleep(TICK_MS);
     updateRaceHud(`第${tick}コーナー / ${TOTAL_TICKS}`, null, null);
     advanceProgress(item, tick);
+    processPatternEvents(item, tick);
 
     const incidentSlot = INCIDENT_TICKS.indexOf(tick);
     if (incidentSlot !== -1) {
@@ -422,9 +492,23 @@ async function beginRace() {
 function advanceProgress(item, tick) {
   item.plans.forEach((plan, index) => {
     const runner = state.runners[index];
-    const curve = RUN_STYLES[runner.style].curve(tick);
+    const curve = runner.pattern.curve(tick);
     const gain = (weightedBase(plan) / TOTAL_TICKS) * curve * runner.condition * randomBetween(0.88, 1.14);
     runner.progress += gain;
+  });
+}
+
+// 展開パターンの持ちネタ（出遅れ・神がかり等）を発火させる
+function processPatternEvents(item, tick) {
+  state.runners.forEach((runner, index) => {
+    if (runner.eventTick !== tick) return;
+    runner.eventTick = -1;
+    const event = runner.pattern.event;
+    const delta = randomBetween(event.delta[0], event.delta[1]);
+    runner.progress = Math.max(2, runner.progress + delta);
+    const text = event.text(item.plans[index].horse);
+    state.highlights.push({ tick, icon: runner.pattern.icon, text });
+    addLog(`${runner.pattern.icon} ${text}`);
   });
 }
 
@@ -442,7 +526,14 @@ function applyIncidentLive(item, incident, tick) {
       (effects.stability || 0) * (plan.stats.stability / 100) +
       (effects.burst || 0) * (plan.stats.burst / 100) +
       (effects.client || 0) * (plan.stats.client / 100);
-    const delta = profile * 0.55 + randomBetween(-2.4, 2.4);
+    let delta = profile * 0.55 + randomBetween(-2.4, 2.4);
+    const factor = state.runners[index].pattern.incidentFactor ?? 1;
+    if (factor < 0) {
+      // 逆境の鬼: マイナスをプラスに変える。プラスの追い風は半減。
+      delta = delta < 0 ? delta * factor : delta * 0.5;
+    } else {
+      delta *= factor;
+    }
     state.runners[index].progress = Math.max(2, state.runners[index].progress + delta);
     if (delta < worstDelta) {
       worstDelta = delta;
@@ -481,13 +572,13 @@ function trackLeaderChange(item, tick) {
     state.highlights.push({
       tick,
       icon: "🏁",
-      text: `${item.plans[leader].horse}（${RUN_STYLES[state.runners[leader].style].label}）が飛び出して先頭に。`,
+      text: `${item.plans[leader].horse}（${state.runners[leader].pattern.label}）が飛び出して先頭に。`,
     });
   } else if (leader !== state.lastLeader) {
     state.highlights.push({
       tick,
       icon: "🔄",
-      text: `${item.plans[leader].horse}（${RUN_STYLES[state.runners[leader].style].label}）が ${item.plans[state.lastLeader].horse} をかわして先頭に立つ！`,
+      text: `${item.plans[leader].horse}（${state.runners[leader].pattern.label}）が ${item.plans[state.lastLeader].horse} をかわして先頭に立つ！`,
     });
     addLog(`🔄 第${tick}コーナー: ${item.plans[leader].horse} が先頭を奪う！`);
   }
@@ -561,26 +652,32 @@ function finishRace(item) {
   const winner = result[0];
   const second = result[1];
   const winnerPlan = item.plans[winner.index];
-  const winnerStyle = RUN_STYLES[state.runners[winner.index].style];
+  const winnerPattern = state.runners[winner.index].pattern;
 
   // 決着ハイライト
-  if (winner.index === state.lastLeader && (winnerStyle.label === "逃げ" || winnerStyle.label === "先行")) {
+  if (winnerPattern.type === "front" && winner.index === state.lastLeader) {
     state.highlights.push({
       tick: TOTAL_TICKS,
       icon: "🏆",
-      text: `${winnerPlan.horse} がそのまま押し切って1着！ 見事な${winnerStyle.label}切り。`,
+      text: `${winnerPlan.horse} がそのまま押し切って1着！ 見事な逃げ切り（${winnerPattern.label}）。`,
     });
-  } else if (winnerStyle.label === "追込" || winnerStyle.label === "差し") {
+  } else if (winnerPattern.type === "closer") {
     state.highlights.push({
       tick: TOTAL_TICKS,
       icon: "🏆",
-      text: `最後の直線、${winnerPlan.horse} が大外から一気に突き抜けて1着！ 鮮やかな${winnerStyle.label}決着。`,
+      text: `最後の直線、${winnerPlan.horse} が一気に突き抜けて1着！ 鮮やかな${winnerPattern.label}決着。`,
+    });
+  } else if (winnerPattern.type === "erratic") {
+    state.highlights.push({
+      tick: TOTAL_TICKS,
+      icon: "🏆",
+      text: `波乱を呼んだ ${winnerPlan.horse}（${winnerPattern.label}）がまさかの1着！ 誰がこの展開を読めただろうか。`,
     });
   } else {
     state.highlights.push({
       tick: TOTAL_TICKS,
       icon: "🏆",
-      text: `混戦を制したのは ${winnerPlan.horse}。着差はわずか、胃へのダメージは甚大。`,
+      text: `${winnerPlan.horse}（${winnerPattern.label}）が混戦を制して1着。着差はわずか、胃へのダメージは甚大。`,
     });
   }
 
@@ -639,12 +736,12 @@ function renderResultPanel(item, result, payouts) {
       ${result
         .map((entry, rank) => {
           const plan = item.plans[entry.index];
-          const style = RUN_STYLES[state.runners[entry.index].style];
+          const pattern = state.runners[entry.index].pattern;
           const medal = ["🥇", "🥈", "🥉", "　"][rank];
           return `
             <li>
               <strong>${medal} ${rank + 1}着</strong>
-              <span>${plan.horse} <small class="style-tag">${style.label}</small></span>
+              <span>${plan.horse} <small class="style-tag">${pattern.label}</small></span>
               <span>${Math.round(entry.finalScore * 1.9)}%</span>
             </li>
           `;
@@ -706,8 +803,8 @@ function showHighlights(item, onClose) {
   highlightCallback = onClose || null;
   els.highlightStyles.innerHTML = item.plans
     .map((plan, index) => {
-      const style = RUN_STYLES[state.runners[index].style];
-      return `<span class="style-chip" style="--lane-color:${LANE_COLORS[index]}">${style.icon} ${plan.horse}【${style.label}】</span>`;
+      const pattern = state.runners[index].pattern;
+      return `<span class="style-chip" style="--lane-color:${LANE_COLORS[index]}">${pattern.icon} ${plan.horse}【${pattern.label}】</span>`;
     })
     .join("");
   els.highlightList.innerHTML = state.highlights
