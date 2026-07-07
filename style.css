@@ -263,6 +263,32 @@ button:disabled {
   margin-bottom: 24px;
 }
 
+.race-count-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.race-count-buttons button {
+  flex: 1;
+  min-width: 44px;
+  padding: 12px 0;
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 2px solid var(--line);
+  border-radius: 4px;
+}
+
+.race-count-buttons button.selected {
+  background: var(--gold);
+  color: #1b1912;
+  border-color: #fff2cf;
+  box-shadow: 0 3px 0 #8a6b1e;
+}
+
 .name-input {
   display: flex;
   align-items: center;

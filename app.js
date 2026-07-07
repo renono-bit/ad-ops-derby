@@ -10,7 +10,6 @@ const LANE_COLORS = ["#f1c453", "#4ba3ff", "#f06c9b", "#36b37e"];
 const BET_AMOUNTS = [100, 300, 500];
 const START_MONEY = 1000;
 const EMERGENCY_FUND = 500;
-const ROUNDS_PER_GAME = 5;
 const TOTAL_TICKS = 16;
 const TICK_MS = 1050;
 const INCIDENT_TICKS = [5, 9, 13];
@@ -42,8 +41,9 @@ const RUN_STYLES = {
 const state = {
   players: [], // { name, color, icon, money, borrowed }
   playerCount: 2,
+  raceCount: 5,
   round: 0,
-  gameCases: [], // 今ゲームで出題される案件（ランダム5件）
+  gameCases: [], // 今ゲームで出題される案件（ランダム抽選）
   bets: [], // { player, plan, amount }
   betOrder: [],
   betTurn: 0,
@@ -61,7 +61,7 @@ const state = {
 const els = {};
 [
   "screen-title", "screen-setup", "screen-game", "screen-final",
-  "titleStart", "countButtons", "nameInputs", "setupStart",
+  "titleStart", "countButtons", "nameInputs", "raceCountButtons", "setupStart",
   "roundLabel", "playerBar",
   "clientName", "clientBrief", "clientIndustry", "clientKpi", "clientBudget", "clientAbsurdity",
   "raceVisual", "raceMessage", "racePhase", "raceLeader", "raceIncident",
@@ -156,7 +156,12 @@ function initPlayers() {
 
 function startGame() {
   state.round = 0;
-  state.gameCases = shuffle(CASES).slice(0, ROUNDS_PER_GAME);
+  // 案件プールより多いレース数の場合は、シャッフルを繰り返して継ぎ足す
+  const deck = [];
+  while (deck.length < state.raceCount) {
+    deck.push(...shuffle(CASES));
+  }
+  state.gameCases = deck.slice(0, state.raceCount);
   showScreen("screen-game");
   startRound();
 }
@@ -192,7 +197,7 @@ function startRound() {
   state.lastLeader = -1;
   state.incidentMessageUntil = -1;
 
-  els.roundLabel.textContent = `${state.round + 1} / ${ROUNDS_PER_GAME}`;
+  els.roundLabel.textContent = `${state.round + 1} / ${state.gameCases.length}`;
   els.clientName.textContent = item.client;
   els.clientBrief.textContent = item.brief;
   els.clientIndustry.textContent = item.industry;
@@ -627,7 +632,7 @@ function finishRace(item) {
 }
 
 function renderResultPanel(item, result, payouts) {
-  const isLastRound = state.round === ROUNDS_PER_GAME - 1;
+  const isLastRound = state.round === state.gameCases.length - 1;
   els.resultPanel.innerHTML = `
     <h3>🏁 決着: ${item.plans[result[0].index].name}</h3>
     <ol class="ranking">
@@ -686,7 +691,7 @@ function renderResultPanel(item, result, payouts) {
 
 function nextRound() {
   state.round += 1;
-  if (state.round >= ROUNDS_PER_GAME) {
+  if (state.round >= state.gameCases.length) {
     showFinal();
   } else {
     startRound();
@@ -906,6 +911,16 @@ els.countButtons.addEventListener("click", (event) => {
     b.classList.toggle("selected", b === button);
   });
   renderNameInputs();
+});
+
+els.raceCountButtons.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-races]");
+  if (!button) return;
+  Sound.se.ui();
+  state.raceCount = Number(button.dataset.races);
+  [...els.raceCountButtons.querySelectorAll("button")].forEach((b) => {
+    b.classList.toggle("selected", b === button);
+  });
 });
 
 els.setupStart.addEventListener("click", () => {
