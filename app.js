@@ -673,11 +673,20 @@ function simulateRace(item) {
           bestIndex = index;
         }
       });
-      incidents.push({ tick, slot, worst: worstDelta < -1.5 ? worstIndex : -1 });
+      // 追い風/直撃の閾値は控えめ(0.8)。同じ閾値でハイライトも生成するので表示と辻褄が合う。
+      const IMPACT_THRESHOLD = 0.8;
+      incidents.push({
+        tick,
+        slot,
+        worst: worstDelta < -IMPACT_THRESHOLD ? worstIndex : -1,
+        worstDelta: Math.round(worstDelta * 10) / 10,
+        best: bestDelta > IMPACT_THRESHOLD ? bestIndex : -1,
+        bestDelta: Math.round(bestDelta * 10) / 10,
+      });
       let impact = "";
-      if (worstDelta < -1.5) {
+      if (worstDelta < -IMPACT_THRESHOLD) {
         impact = ` 直撃したのは ${item.plans[worstIndex].horse}。`;
-      } else if (bestDelta > 1.5) {
+      } else if (bestDelta > IMPACT_THRESHOLD) {
         impact = ` 追い風を受けたのは ${item.plans[bestIndex].horse}。`;
       }
       highlights.push({
@@ -791,20 +800,59 @@ async function playbackRace(item, script) {
       els.raceMessage.textContent = `⚡ ${incident.type}: ${incident.title}`;
       state.incidentMessageUntil = tick + 1;
       addLog(`⚡ ${incident.type}: ${incident.title}。${incident.body}`);
+      // 追い風/直撃の馬を割り出してバナー・ログ・カットインに載せる
+      const impacts = [];
+      if (incidentEntry.worst >= 0) {
+        impacts.push({
+          kind: "worst",
+          horse: item.plans[incidentEntry.worst].horse,
+          delta: incidentEntry.worstDelta,
+        });
+      }
+      if (incidentEntry.best >= 0) {
+        impacts.push({
+          kind: "best",
+          horse: item.plans[incidentEntry.best].horse,
+          delta: incidentEntry.bestDelta,
+        });
+      }
+      const impactHtml = impacts
+        .map((imp) => {
+          const cls = imp.kind === "worst" ? "impact-neg" : "impact-pos";
+          const sign = imp.delta >= 0 ? "+" : "";
+          const label = imp.kind === "worst" ? "直撃" : "追い風";
+          return `<span class="${cls}">${label} ${escapeHtml(imp.horse)} <b>${sign}${imp.delta}</b></span>`;
+        })
+        .join("");
+      const impactText = impacts
+        .map((imp) => {
+          const sign = imp.delta >= 0 ? "+" : "";
+          const label = imp.kind === "worst" ? "直撃" : "追い風";
+          return `${label} ${imp.horse}(${sign}${imp.delta})`;
+        })
+        .join(" / ");
       // 事件演出: 赤バナー割り込み + 画面微振動 + 直撃馬の失速アニメ
-      els.incidentBanner.textContent = `⚡ ${incident.type}: ${incident.title}`;
+      els.incidentBanner.innerHTML =
+        `<span class="incident-headline">⚡ ${escapeHtml(incident.type)}: ${escapeHtml(incident.title)}</span>` +
+        (impactHtml ? `<span class="incident-impacts">${impactHtml}</span>` : "");
       els.incidentBanner.classList.add("show");
       els.raceVisual.classList.add("shake");
       setTimeout(() => els.raceVisual.classList.remove("shake"), 500);
-      setTimeout(() => els.incidentBanner.classList.remove("show"), 2600);
+      setTimeout(() => els.incidentBanner.classList.remove("show"), 3200);
+      if (impactText) addLog(`　└ ${impactText}`);
       if (incidentEntry.worst >= 0) {
         const struck = document.getElementById(`horse-${incidentEntry.worst}`);
         struck?.classList.add("stumble");
         setTimeout(() => struck?.classList.remove("stumble"), 1600);
       }
+      if (incidentEntry.best >= 0) {
+        const boosted = document.getElementById(`horse-${incidentEntry.best}`);
+        boosted?.classList.add("tailwind");
+        setTimeout(() => boosted?.classList.remove("tailwind"), 1600);
+      }
       if (state.cutInEnabled) {
         renderRacePositions(item, tick);
-        showCutIn(incident);
+        showCutIn(incident, impacts);
         await waitForCutInContinue();
         hideCutIn();
       }
@@ -1024,10 +1072,21 @@ function nextRound() {
 
 let cutInTimer = null;
 
-function showCutIn(incident) {
+function showCutIn(incident, impacts = []) {
   els.cutInType.textContent = incident.type;
   els.cutInTitle.textContent = incident.title;
-  els.cutInBody.textContent = incident.body;
+  els.cutInBody.innerHTML =
+    escapeHtml(incident.body) +
+    (impacts.length
+      ? `<span class="cutin-impacts">${impacts
+          .map((imp) => {
+            const cls = imp.kind === "worst" ? "impact-neg" : "impact-pos";
+            const sign = imp.delta >= 0 ? "+" : "";
+            const label = imp.kind === "worst" ? "直撃" : "追い風";
+            return `<span class="${cls}">${label} ${escapeHtml(imp.horse)} <b>${sign}${imp.delta}</b></span>`;
+          })
+          .join("")}</span>`
+      : "");
   els.cutIn.classList.add("show");
   els.cutIn.setAttribute("aria-hidden", "false");
 }

@@ -40,10 +40,10 @@ const Sound = (() => {
       master.gain.value = muted ? 0 : 0.6;
       master.connect(ctx.destination);
       bgmGain = ctx.createGain();
-      bgmGain.gain.value = 0.16;
+      bgmGain.gain.value = 0.09;
       bgmGain.connect(master);
       seGain = ctx.createGain();
-      seGain.gain.value = 0.32;
+      seGain.gain.value = 0.22;
       seGain.connect(master);
     }
     // 裏タブ中は再開しない（visibilitychangeで復帰時に再開される）

@@ -784,9 +784,8 @@ h1, h2, h3,
   top: 120px;
   transform: translateX(-50%) skewX(-4deg);
   z-index: 6;
-  padding: 8px 26px;
+  padding: 10px 22px;
   font-family: var(--font-jp);
-  font-size: 17px;
   color: #fff;
   background: linear-gradient(90deg, #7e1d1d, #c22626 40%, #7e1d1d);
   border: 2px solid var(--red);
@@ -795,14 +794,73 @@ h1, h2, h3,
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s;
-  white-space: nowrap;
-  max-width: 92%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 94%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
 }
 
 .incident-banner.show {
   opacity: 1;
+}
+
+.incident-headline {
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.incident-impacts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 10px;
+  font-size: 13px;
+  transform: skewX(4deg); /* バナーの傾きを打ち消して読みやすく */
+}
+
+.impact-pos,
+.impact-neg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--r-chip);
+  font-family: var(--font-jp);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.impact-pos {
+  color: #b6ffcf;
+}
+
+.impact-pos b {
+  color: var(--green);
+  font-family: var(--font-pixel);
+  font-size: 12px;
+}
+
+.impact-neg {
+  color: #ffd2d2;
+}
+
+.impact-neg b {
+  color: #ffb0b0;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+}
+
+.cutin-impacts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 10px;
+  margin-top: 10px;
 }
 
 /* 直撃馬の失速アニメ */
@@ -815,6 +873,18 @@ h1, h2, h3,
   25% { transform: translateY(3px) rotate(7deg); }
   50% { transform: translateY(-1px) rotate(-6deg); filter: grayscale(0.6); }
   75% { transform: translateY(2px) rotate(5deg); }
+}
+
+/* 追い風馬の加速演出 */
+.horse.tailwind .runner-icon {
+  animation: horse-tailwind 0.5s ease-out 3;
+  box-shadow: 0 0 12px rgba(54, 179, 126, 0.7), 0 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+@keyframes horse-tailwind {
+  0% { transform: translateX(0); }
+  40% { transform: translateX(-4px) scale(1.08); }
+  100% { transform: translateX(0); }
 }
 
 .stadium-sky {
