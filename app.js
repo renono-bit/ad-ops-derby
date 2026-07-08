@@ -5,8 +5,8 @@
 // ローカル(1画面) / オンライン(ルームID) 両対応
 // ============================================================
 
-const PLAYER_COLORS = ["#ff6ea9", "#4aa8ff", "#ffd23f", "#4fd18b"];
-const PLAYER_ICONS = ["🐴", "🦄", "🐎", "🎠"];
+const PLAYER_COLORS = ["#ff6ea9", "#4aa8ff", "#ffd23f", "#4fd18b", "#b78aff", "#ff9f45"];
+const PLAYER_ICONS = ["🐴", "🦄", "🐎", "🎠", "🦓", "🐫"];
 const LANE_COLORS = ["#f1c453", "#4ba3ff", "#f06c9b", "#36b37e"];
 const BET_AMOUNTS = [100, 300, 500];
 const START_MONEY = 1000;
@@ -14,7 +14,7 @@ const EMERGENCY_FUND = 500;
 const TOTAL_TICKS = 16;
 const TICK_MS = 1050;
 const INCIDENT_TICKS = [5, 9, 13];
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 6;
 
 // 展開パターン: レースごとに各馬へランダムに割り当てられ、展開が毎回変わる（全30種）
 // type: front=逃げ系 / stalker=先行系 / closer=差し・追込系 / erratic=ムラ・トラブル系
@@ -1243,7 +1243,7 @@ function showFinal() {
   els.finalStandings.innerHTML = standings
     .map((player, rank) => {
       const crown = rank === 0 ? "👑 " : "";
-      const rankLabel = ["1st", "2nd", "3rd", "4th"][rank];
+      const rankLabel = `${rank + 1}${["st", "nd", "rd"][rank] || "th"}`;
       const debt = player.borrowed > 0 ? `<small class="debt">（前借り ${formatPt(player.borrowed)}pt）</small>` : "";
       return `
         <div class="final-row rank-${rank}" style="--player-color:${player.color}">
@@ -1463,7 +1463,7 @@ Net.handlers.onGuestData = (conn, msg) => {
       return;
     }
     if (state.roster.length >= MAX_PLAYERS) {
-      Net.sendTo(conn, { t: "reject", reason: "この部屋は満員です（最大4人）。" });
+      Net.sendTo(conn, { t: "reject", reason: `この部屋は満員です（最大${MAX_PLAYERS}人）。` });
       return;
     }
     const index = state.roster.length;

@@ -37,7 +37,7 @@
           <button id="titleOnline" class="big-button online-button" type="button">🌐 オンライン対戦（ルームID）</button>
         </div>
         <ul class="title-notes">
-          <li>🎮 1〜4人で遊べます（1台の画面をみんなで囲む / ルームIDで各自の端末から）</li>
+          <li>🎮 1〜6人で遊べます（1台の画面をみんなで囲む / ルームIDで各自の端末から）</li>
           <li>💰 運用プランに持ちポイントを賭けて、全レースの合計で勝負</li>
           <li>🔊 音が出ます（右上のボタンでミュートできます）</li>
         </ul>
@@ -55,6 +55,8 @@
           <button type="button" data-count="2" class="selected">2人</button>
           <button type="button" data-count="3">3人</button>
           <button type="button" data-count="4">4人</button>
+          <button type="button" data-count="5">5人</button>
+          <button type="button" data-count="6">6人</button>
         </div>
         <div id="nameInputs" class="name-inputs"></div>
         <p class="setup-note">ハプニング演出を選んでください。</p>
@@ -108,7 +110,7 @@
             </div>
             <div class="online-card">
               <h3>🚪 部屋に入る</h3>
-              <p>ホストから共有されたルームID（4文字）を入力してください。</p>
+              <p>ホストから共有されたルームID（4文字）を入力してください。1部屋最大6人まで。</p>
               <input id="roomCodeInput" class="room-code-input" type="text" maxlength="4" placeholder="例: 3F8K" autocapitalize="characters" autocomplete="off" />
               <button id="joinRoomButton" class="big-button online-action" type="button">🚪 入室する</button>
             </div>
@@ -123,7 +125,7 @@
             <strong id="roomCodeDisplay"></strong>
             <button id="copyRoomCode" class="sub-button" type="button">📋 コピー</button>
           </div>
-          <p class="setup-note">メンバー（最大4人）</p>
+          <p class="setup-note">メンバー（最大6人）</p>
           <div id="lobbyMembers" class="lobby-members"></div>
           <div id="hostSettings">
             <p class="setup-note">ハプニング演出を選んでください。</p>
