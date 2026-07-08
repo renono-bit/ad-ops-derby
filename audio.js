@@ -46,7 +46,8 @@ const Sound = (() => {
       seGain.gain.value = 0.32;
       seGain.connect(master);
     }
-    if (ctx.state === "suspended") ctx.resume();
+    // 裏タブ中は再開しない（visibilitychangeで復帰時に再開される）
+    if (ctx.state === "suspended" && !document.hidden) ctx.resume();
     return true;
   }
 
@@ -250,6 +251,14 @@ const Sound = (() => {
     bgm.nextTime = ctx.currentTime + 0.05;
     const stepDur = 30 / song.bpm; // 8分音符
     bgm.timerId = setInterval(() => {
+      // タブ非表示中は予約しない（復帰時の音符一斉再生＝BGM被りを防ぐ）
+      if (document.hidden) return;
+      // スケジューラが遅れて音符が溜まっていたら、捨てて現在時刻に追従する
+      if (bgm.nextTime < ctx.currentTime - 0.05) {
+        const missed = Math.ceil((ctx.currentTime - bgm.nextTime) / stepDur);
+        bgm.step += missed;
+        bgm.nextTime += missed * stepDur;
+      }
       while (bgm.nextTime < ctx.currentTime + 0.18) {
         scheduleStep(song, bgm.step, bgm.nextTime);
         bgm.nextTime += stepDur;
@@ -257,6 +266,16 @@ const Sound = (() => {
       }
     }, 40);
   }
+
+  // タブが裏に回ったら音声全体を一時停止し、戻ったら再開する
+  document.addEventListener("visibilitychange", () => {
+    if (!ctx) return;
+    if (document.hidden) {
+      if (ctx.state === "running") ctx.suspend();
+    } else if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+  });
 
   function stopBgm() {
     if (bgm.timerId !== null) {
