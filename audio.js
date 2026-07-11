@@ -143,6 +143,18 @@ const Sound = (() => {
       tone({ freq: noteHz("D4"), time: t + 0.6, dur: 0.32, type: "triangle", vol: 0.8 });
       tone({ freq: noteHz("C#4"), time: t + 0.95, dur: 0.7, type: "triangle", vol: 0.8, slideTo: noteHz("C4") });
     },
+    fate() {
+      // パチンコ激アツ風: 加速する鼓動 + 上昇スイープ
+      if (!ensure()) return;
+      const t = ctx.currentTime;
+      let time = t;
+      for (let i = 0; i < 9; i += 1) {
+        tone({ freq: 66, time, dur: 0.1, type: "triangle", vol: 1.0 });
+        noise({ time, dur: 0.06, vol: 0.3, filterFreq: 280 });
+        time += 0.42 - i * 0.035;
+      }
+      tone({ freq: 160, time: t + 2.2, dur: 1.0, type: "sawtooth", vol: 0.5, slideTo: 1900 });
+    },
   };
 
   // ---------- BGM ----------

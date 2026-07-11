@@ -83,6 +83,7 @@
             <li>全員 <strong>1,000pt</strong> でスタート。毎レース、賭け金（100 / 300 / 500pt）を選んでプランに投票。</li>
             <li><strong>1着的中でオッズ×賭け金</strong> を獲得、2着なら賭け金が返ってくる。</li>
             <li>全レースが終わった時点で、持ちポイントが一番多い人が優勝！</li>
+            <li>最終レースだけは <strong>🔥 全ツッパ（有り金全部）</strong> が解禁。そして…まれに「何か」が起こるらしい。</li>
             <li>ポイントが尽きても「来期予算の前借り」で自動補填されるので最後まで遊べます。</li>
           </ul>
         </div>
@@ -223,6 +224,7 @@
             <button type="button" data-amount="100" class="selected">100pt</button>
             <button type="button" data-amount="300">300pt</button>
             <button type="button" data-amount="500">500pt</button>
+            <button type="button" data-amount="all" id="betAllButton" class="bet-all hidden">🔥 全ツッパ</button>
           </div>
           <div class="plans-grid" id="plansGrid"></div>
         </section>
@@ -277,6 +279,20 @@
     </div>
 
     <canvas id="burstCanvas" class="burst-canvas" aria-hidden="true"></canvas>
+
+    <!-- 最終レース後の運命イベント（パチンコ激アツ風カットイン） -->
+    <div id="fateOverlay" class="fate-overlay" aria-hidden="true">
+      <div id="fateCharge" class="fate-charge">
+        <p class="fate-kanji">運命ノ大抽選</p>
+        <p class="fate-sub">⚡ 激アツ !? ⚡</p>
+      </div>
+      <div id="fateResult" class="fate-result hidden">
+        <p class="fate-result-eyebrow">FATE</p>
+        <strong id="fateTitle"></strong>
+        <span id="fateDetail"></span>
+        <button id="fateAccept" class="next-button" type="button">受け入れる ▶</button>
+      </div>
+    </div>
 
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="./data.js"></script>

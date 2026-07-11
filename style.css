@@ -1637,6 +1637,136 @@ h1, h2, h3,
   width: auto;
 }
 
+/* 全ツッパボタン（最終レース限定） */
+
+.bet-amounts .bet-all {
+  color: #fff;
+  background: linear-gradient(135deg, #c22626, #7e1d1d);
+  border: 2px solid #ffb0b0;
+  box-shadow: 0 3px 0 #4d0f0f, 0 0 14px rgba(255, 92, 92, 0.5);
+  animation: all-in-pulse 0.9s ease-in-out infinite;
+}
+
+.bet-amounts .bet-all.selected {
+  background: linear-gradient(135deg, #ff5c5c, #c22626);
+  border-color: #fff;
+  box-shadow: 0 3px 0 #4d0f0f, 0 0 24px rgba(255, 92, 92, 0.9);
+}
+
+@keyframes all-in-pulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* 運命イベント（パチンコ激アツ風） */
+
+.fate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(194, 38, 38, 0.5), transparent 65%),
+    rgba(0, 0, 0, 0.94);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.fate-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+  animation: fate-bg-pulse 0.6s linear infinite;
+}
+
+@keyframes fate-bg-pulse {
+  0%, 100% { background-color: rgba(0, 0, 0, 0.94); }
+  50% { background-color: rgba(40, 0, 0, 0.94); }
+}
+
+.fate-charge {
+  text-align: center;
+  animation: fate-shake 0.25s linear infinite;
+}
+
+@keyframes fate-shake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 2px); }
+  50% { transform: translate(3px, -2px); }
+  75% { transform: translate(-2px, -2px); }
+}
+
+.fate-kanji {
+  margin: 0;
+  font-family: var(--font-jp);
+  font-size: clamp(44px, 9vw, 88px);
+  color: var(--gold);
+  text-shadow:
+    0 0 18px rgba(241, 196, 83, 0.9),
+    3px 3px 0 #7e1d1d,
+    6px 6px 0 #000;
+  animation: fate-flicker 0.3s steps(2) infinite;
+  letter-spacing: 6px;
+}
+
+@keyframes fate-flicker {
+  0% { color: var(--gold); transform: scale(1); }
+  50% { color: #ff5c5c; transform: scale(1.06); }
+  100% { color: var(--gold); transform: scale(1); }
+}
+
+.fate-sub {
+  margin: 14px 0 0;
+  font-family: var(--font-jp);
+  font-size: 24px;
+  color: #ffb0b0;
+  animation: fate-flicker 0.45s steps(2) infinite;
+}
+
+.fate-result {
+  width: min(600px, calc(100% - 40px));
+  padding: 34px 38px;
+  text-align: center;
+  background: linear-gradient(160deg, #3d2c05, #14120e 75%);
+  border: 4px solid var(--gold);
+  border-radius: var(--r-modal);
+  box-shadow: 0 0 70px rgba(241, 196, 83, 0.6);
+  transform: skewX(-2deg);
+  animation: fate-slam 0.35s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes fate-slam {
+  0% { transform: skewX(-2deg) scale(2.2); opacity: 0; }
+  100% { transform: skewX(-2deg) scale(1); opacity: 1; }
+}
+
+.fate-result-eyebrow {
+  margin: 0 0 10px;
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--gold);
+}
+
+.fate-result strong {
+  display: block;
+  font-family: var(--font-jp);
+  font-size: clamp(28px, 5vw, 44px);
+  color: var(--gold);
+  text-shadow: 0 0 16px rgba(241, 196, 83, 0.8), 2px 2px 0 #000;
+  margin-bottom: 14px;
+}
+
+.fate-result span {
+  display: block;
+  font-size: 17px;
+  color: var(--text);
+  line-height: 1.8;
+  margin-bottom: 22px;
+}
+
 /* 大穴バースト用キャンバス */
 .burst-canvas {
   position: fixed;

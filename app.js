@@ -131,7 +131,8 @@ const els = {};
   "eventLog", "resultPanel",
   "cutIn", "cutInType", "cutInTitle", "cutInBody", "cutInContinue",
   "ribbonModal", "ribbonDots", "ribbonBody", "ribbonNext", "ribbonSecondary",
-  "burstCanvas",
+  "burstCanvas", "betAllButton",
+  "fateOverlay", "fateCharge", "fateResult", "fateTitle", "fateDetail", "fateAccept",
   "finalStandings", "finalComment", "rematchButton", "changeMembersButton", "shareButton",
   "onlineFinalNote",
   "confetti", "muteButton",
@@ -181,6 +182,10 @@ function weightedBase(plan) {
 
 function currentCase() {
   return CASES[state.deck[state.round]];
+}
+
+function isFinalRound() {
+  return state.round === state.deck.length - 1;
 }
 
 function isOnline() {
@@ -405,7 +410,12 @@ function promptNextBetter() {
     addLog(`💸 ${player.name} が「来期予算の前借り」で ${EMERGENCY_FUND}pt を調達。役員会には内緒。`, player.color);
   }
 
-  if (state.betAmount > player.money) {
+  // 全ツッパは最終レース限定
+  els.betAllButton.classList.toggle("hidden", !isFinalRound());
+  if (state.betAmount === "all" && !isFinalRound()) {
+    state.betAmount = BET_AMOUNTS[0];
+  }
+  if (state.betAmount !== "all" && state.betAmount > player.money) {
     state.betAmount = [...BET_AMOUNTS].reverse().find((a) => a <= player.money) || BET_AMOUNTS[0];
   }
 
@@ -452,9 +462,9 @@ function promptNextBetter() {
 
 function updateBetAmountButtons(player) {
   [...els.betAmounts.querySelectorAll("button")].forEach((button) => {
-    const amount = Number(button.dataset.amount);
+    const amount = button.dataset.amount === "all" ? "all" : Number(button.dataset.amount);
     button.classList.toggle("selected", amount === state.betAmount);
-    button.disabled = !player || amount > player.money;
+    button.disabled = !player || (amount !== "all" && amount > player.money);
   });
 }
 
@@ -467,15 +477,17 @@ function updateBetInteractivity() {
 
 function placeBet(planIndex) {
   if (!state.bettingOpen || state.running || !isMyTurn()) return;
+  const idx = currentBetterIndex();
+  const raw = state.betAmount === "all" ? state.players[idx].money : state.betAmount;
+  const amount = Math.min(raw, state.players[idx].money);
+  if (amount <= 0) return;
   if (state.mode === "guest") {
-    Net.sendToHost({ t: "bet", plan: planIndex, amount: state.betAmount });
+    Net.sendToHost({ t: "bet", plan: planIndex, amount });
     // ホストからのbetPlaced反映を待つ間、二重送信を防ぐ
     els.betIndicator.innerHTML = `<span class="bet-turn-note">送信中…</span>`;
     updateBetInteractivity();
     return;
   }
-  const idx = currentBetterIndex();
-  const amount = Math.min(state.betAmount, state.players[idx].money);
   if (state.mode === "host") {
     hostApplyBet(idx, planIndex, amount);
   } else {
@@ -495,9 +507,13 @@ function applyBet(playerIdx, planIndex, amount) {
   const player = state.players[playerIdx];
   const item = currentCase();
   const plan = item.plans[planIndex];
+  const allIn = isFinalRound() && amount === player.money && amount > BET_AMOUNTS[BET_AMOUNTS.length - 1];
   player.money -= amount;
   state.bets.push({ player: playerIdx, plan: planIndex, amount });
   Sound.se.coin();
+  if (allIn) {
+    addLog(`🔥🔥 ${player.name}、有り金全部の全ツッパ！！ 退路はもう無い。`, player.color);
+  }
   addLog(
     `🎫 ${player.name} が ${plan.horse}（${plan.odds.toFixed(1)}倍）に ${amount}pt。的中なら ${formatPt(Math.round(amount * plan.odds))}pt！`,
     player.color,
@@ -1061,11 +1077,98 @@ function renderResultPanel(item, result, payouts) {
 function nextRound() {
   state.round += 1;
   if (state.round >= state.deck.length) {
-    if (state.mode === "host") Net.broadcast({ t: "final" });
-    showFinal();
+    const fate = generateFate();
+    if (state.mode === "host") Net.broadcast({ t: "final", fate });
+    finishGame(fate);
   } else {
     startRound();
   }
+}
+
+// ---------- 運命イベント（最終レース後・10%） ----------
+
+const FATE_CHANCE = 0.1;
+const FATE_SOLO_AMOUNT = 10000;
+
+// 乱数はホスト/ローカルだけが回し、ゲストへはfateオブジェクトごと配信する
+function generateFate() {
+  if (Math.random() >= FATE_CHANCE) return null;
+  if (state.players.length === 1) {
+    return { kind: "solo", delta: Math.random() < 0.5 ? FATE_SOLO_AMOUNT : -FATE_SOLO_AMOUNT };
+  }
+  let from = 0;
+  let to = 0;
+  state.players.forEach((player, i) => {
+    if (player.money > state.players[from].money) from = i;
+    if (player.money < state.players[to].money) to = i;
+  });
+  if (from === to || state.players[from].money <= 0) return null; // 全員同額なら不発
+  return { kind: "transfer", from, to, amount: state.players[from].money };
+}
+
+async function finishGame(fate) {
+  if (fate) {
+    await playFateEvent(fate);
+  }
+  showFinal();
+}
+
+function playFateEvent(fate) {
+  return new Promise((resolve) => {
+    Sound.stopBgm();
+    els.fateCharge.classList.remove("hidden");
+    els.fateResult.classList.add("hidden");
+    els.fateOverlay.classList.add("show");
+    els.fateOverlay.setAttribute("aria-hidden", "false");
+    Sound.se.fate();
+
+    setTimeout(() => {
+      let title;
+      let detail;
+      if (fate.kind === "solo") {
+        const player = state.players[0];
+        player.money += fate.delta;
+        if (fate.delta > 0) {
+          title = "🎊 決算賞与、爆誕！！";
+          detail = `クライアントの予算が余っていたらしい。${player.name} に +${formatPt(fate.delta)}pt！！ 理不尽は、たまに優しい。`;
+        } else {
+          title = "💸 請求ミス発覚…！！";
+          detail = `過去の広告費に計上漏れが見つかった。${player.name} から ${formatPt(fate.delta)}pt…。理不尽は、いつも突然。`;
+        }
+      } else {
+        const from = state.players[fate.from];
+        const to = state.players[fate.to];
+        from.money -= fate.amount;
+        to.money += fate.amount;
+        title = "⚡ 大・逆・転！！ ⚡";
+        detail = `期末の予算再配分が発動！ 1位 ${from.name} の全ポイント ${formatPt(fate.amount)}pt が、最下位 ${to.name} へ全額移動！！ 広告運用に、聖域はない。`;
+      }
+      els.fateTitle.textContent = title;
+      els.fateDetail.textContent = detail;
+      els.fateCharge.classList.add("hidden");
+      els.fateResult.classList.remove("hidden");
+      burstGold(320);
+      Sound.se.win();
+      setTimeout(() => Sound.se.goal(), 700);
+
+      const done = () => {
+        if (fateTimer) {
+          clearTimeout(fateTimer);
+          fateTimer = null;
+        }
+        els.fateAccept.onclick = null;
+        els.fateOverlay.classList.remove("show");
+        els.fateOverlay.setAttribute("aria-hidden", "true");
+        resolve();
+      };
+      els.fateAccept.onclick = () => {
+        Sound.se.ui();
+        done();
+      };
+      let fateTimer = setTimeout(done, 15000); // 放置しても進む
+      els.fateAccept.focus();
+    }, 3400);
+  });
 }
 
 // ---------- カットイン ----------
@@ -1542,7 +1645,11 @@ Net.handlers.onGuestData = (conn, msg) => {
     const plan = Number(msg.plan);
     const amount = Number(msg.amount);
     if (!Number.isInteger(plan) || plan < 0 || plan >= currentCase().plans.length) return;
-    if (!BET_AMOUNTS.includes(amount)) return;
+    // 通常は定額のみ。最終レースは全ツッパ（所持金と同額）も受け付ける
+    const okAmount =
+      BET_AMOUNTS.includes(amount) ||
+      (isFinalRound() && amount > 0 && amount === state.players[playerIdx].money);
+    if (!okAmount) return;
     hostApplyBet(playerIdx, plan, amount);
   }
 };
@@ -1659,7 +1766,7 @@ function handleHostMessage(msg) {
       playbackRace(currentCase(), msg.script);
       break;
     case "final":
-      showFinal();
+      finishGame(msg.fate || null);
       break;
     case "rematch":
       stopConfetti();
@@ -1819,7 +1926,8 @@ els.betAmounts.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-amount]");
   if (!button || button.disabled) return;
   Sound.se.ui();
-  state.betAmount = Number(button.dataset.amount);
+  state.betAmount = button.dataset.amount === "all" ? "all" : Number(button.dataset.amount);
+  if (state.betAmount === "all") Sound.se.alarm();
   const player = isMyTurn() ? state.players[currentBetterIndex()] : null;
   updateBetAmountButtons(player);
 });
