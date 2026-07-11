@@ -1113,7 +1113,8 @@ async function finishGame(fate) {
   showFinal();
 }
 
-function playFateEvent(fate) {
+// 演出部分（チャージ→スラム→受け入れ）。デモモードからも再利用する
+function playFateOverlay(title, detail) {
   return new Promise((resolve) => {
     Sound.stopBgm();
     els.fateCharge.classList.remove("hidden");
@@ -1123,26 +1124,6 @@ function playFateEvent(fate) {
     Sound.se.fate();
 
     setTimeout(() => {
-      let title;
-      let detail;
-      if (fate.kind === "solo") {
-        const player = state.players[0];
-        player.money += fate.delta;
-        if (fate.delta > 0) {
-          title = "🎊 決算賞与、爆誕！！";
-          detail = `クライアントの予算が余っていたらしい。${player.name} に +${formatPt(fate.delta)}pt！！ 理不尽は、たまに優しい。`;
-        } else {
-          title = "💸 請求ミス発覚…！！";
-          detail = `過去の広告費に計上漏れが見つかった。${player.name} から ${formatPt(fate.delta)}pt…。理不尽は、いつも突然。`;
-        }
-      } else {
-        const from = state.players[fate.from];
-        const to = state.players[fate.to];
-        from.money -= fate.amount;
-        to.money += fate.amount;
-        title = "⚡ 大・逆・転！！ ⚡";
-        detail = `期末の予算再配分が発動！ 1位 ${from.name} の全ポイント ${formatPt(fate.amount)}pt が、最下位 ${to.name} へ全額移動！！ 広告運用に、聖域はない。`;
-      }
       els.fateTitle.textContent = title;
       els.fateDetail.textContent = detail;
       els.fateCharge.classList.add("hidden");
@@ -1151,6 +1132,7 @@ function playFateEvent(fate) {
       Sound.se.win();
       setTimeout(() => Sound.se.goal(), 700);
 
+      let fateTimer = null;
       const done = () => {
         if (fateTimer) {
           clearTimeout(fateTimer);
@@ -1165,9 +1147,64 @@ function playFateEvent(fate) {
         Sound.se.ui();
         done();
       };
-      let fateTimer = setTimeout(done, 15000); // 放置しても進む
+      fateTimer = setTimeout(done, 15000); // 放置しても進む
       els.fateAccept.focus();
     }, 3400);
+  });
+}
+
+function playFateEvent(fate) {
+  let title;
+  let detail;
+  if (fate.kind === "solo") {
+    const player = state.players[0];
+    player.money += fate.delta;
+    if (fate.delta > 0) {
+      title = "🎊 決算賞与、爆誕！！";
+      detail = `クライアントの予算が余っていたらしい。${player.name} に +${formatPt(fate.delta)}pt！！ 理不尽は、たまに優しい。`;
+    } else {
+      title = "💸 請求ミス発覚…！！";
+      detail = `過去の広告費に計上漏れが見つかった。${player.name} から ${formatPt(fate.delta)}pt…。理不尽は、いつも突然。`;
+    }
+  } else {
+    const from = state.players[fate.from];
+    const to = state.players[fate.to];
+    from.money -= fate.amount;
+    to.money += fate.amount;
+    title = "⚡ 大・逆・転！！ ⚡";
+    detail = `期末の予算再配分が発動！ 1位 ${from.name} の全ポイント ${formatPt(fate.amount)}pt が、最下位 ${to.name} へ全額移動！！ 広告運用に、聖域はない。`;
+  }
+  return playFateOverlay(title, detail);
+}
+
+// 隠しテストモード: タイトル画面の馬パレードを7回クリックで運命ノ大抽選デモ
+// （ポイントは変動しない。押すたびに3パターンを順番に再生）
+const FATE_DEMO_TAPS = 7;
+let fateDemoTaps = 0;
+let fateDemoVariant = 0;
+
+function playFateDemo() {
+  Sound.ensure();
+  const variants = [
+    {
+      title: "⚡ 大・逆・転！！ ⚡",
+      detail: "期末の予算再配分が発動！ 1位 タロウ の全ポイント 3,450pt が、最下位 ハナコ へ全額移動！！ 広告運用に、聖域はない。",
+    },
+    {
+      title: "🎊 決算賞与、爆誕！！",
+      detail: "クライアントの予算が余っていたらしい。あなた に +10,000pt！！ 理不尽は、たまに優しい。",
+    },
+    {
+      title: "💸 請求ミス発覚…！！",
+      detail: "過去の広告費に計上漏れが見つかった。あなた から -10,000pt…。理不尽は、いつも突然。",
+    },
+  ];
+  const variant = variants[fateDemoVariant % variants.length];
+  fateDemoVariant += 1;
+  playFateOverlay(variant.title, `${variant.detail}〔TEST MODE〕`).then(() => {
+    if (els["screen-title"].classList.contains("active")) {
+      Sound.startBgm("lobby");
+    }
   });
 }
 
@@ -1825,6 +1862,13 @@ els.muteButton.addEventListener("click", () => {
   Sound.ensure();
   Sound.toggleMute();
   updateMuteButton();
+});
+
+document.querySelector(".title-horses").addEventListener("click", () => {
+  fateDemoTaps += 1;
+  if (fateDemoTaps < FATE_DEMO_TAPS) return;
+  fateDemoTaps = 0;
+  playFateDemo();
 });
 
 els.titleStart.addEventListener("click", () => {
